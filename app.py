@@ -1,9 +1,8 @@
 import streamlit as st
-from PIL import Image
 import json
 import os
 
-# ================== File Paths ==================
+# ================== Paths ==================
 DATA_DIR = "data"
 POST_FILE = f"{DATA_DIR}/posts.json"
 USER_FILE = f"{DATA_DIR}/users.json"
@@ -23,7 +22,7 @@ def save_json(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
-# ================== Data Load ==================
+# ================== Data ==================
 users = load_json(USER_FILE, {
     "ABLE": {
         "password": "1234",
@@ -51,37 +50,36 @@ users = load_json(USER_FILE, {
 posts = load_json(POST_FILE, [])
 
 # ================== Session ==================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "current_user" not in st.session_state:
-    st.session_state.current_user = None
+for k in ["logged_in","current_user","login_open","write_open","profile_open","edit_idx"]:
+    if k not in st.session_state:
+        st.session_state[k] = None if "idx" in k else False
 
 # ================== Header ==================
-col1, col2, col3 = st.columns([5, 1, 1])
-with col1:
+c1, c2, c3 = st.columns([6,1,1])
+with c1:
     st.markdown("## AOUSE")
-with col2:
+with c2:
     if not st.session_state.logged_in:
         if st.button("ARRIVE"):
-            st.session_state.show_login = True
-with col3:
+            st.session_state.login_open = True
+with c3:
     if st.session_state.logged_in:
         if st.button("LOGOUT"):
             st.session_state.logged_in = False
             st.session_state.current_user = None
             st.rerun()
 
-# ================== Login Modal ==================
-if st.session_state.get("show_login"):
-    with st.modal("ARRIVE"):
+# ================== Login ==================
+if st.session_state.login_open:
+    with st.dialog("ARRIVE"):
         uid = st.text_input("ID")
         pw = st.text_input("Password", type="password")
         if st.button("ARRIVE"):
-            user = users.get(uid)
-            if user and user["password"] == pw:
+            u = users.get(uid)
+            if u and u["password"] == pw:
                 st.session_state.logged_in = True
                 st.session_state.current_user = uid
-                st.session_state.show_login = False
+                st.session_state.login_open = False
                 st.rerun()
             else:
                 st.error("로그인 실패")
@@ -89,25 +87,25 @@ if st.session_state.get("show_login"):
 # ================== Top Bar ==================
 st.divider()
 if st.session_state.logged_in:
-    col1, col2, col3 = st.columns([3, 2, 2])
-    with col1:
+    a,b,c = st.columns([3,2,2])
+    with a:
         st.selectbox("게시글", ["게시글"])
-    with col2:
+    with b:
         if st.button("게시물 쓰기"):
-            st.session_state.show_write = True
-    with col3:
+            st.session_state.write_open = True
+    with c:
         if st.button("계정 설정"):
-            st.session_state.show_profile = True
+            st.session_state.profile_open = True
 else:
-    col1, col2 = st.columns([3, 2])
-    with col1:
+    a,b = st.columns([3,2])
+    with a:
         st.selectbox("게시글", ["게시글"])
-    with col2:
+    with b:
         st.selectbox("전체", ["전체"])
 
-# ================== Profile Modal ==================
-if st.session_state.get("show_profile"):
-    with st.modal("계정 설정"):
+# ================== Profile ==================
+if st.session_state.profile_open:
+    with st.dialog("계정 설정"):
         u = users[st.session_state.current_user]
         nickname = st.text_input("닉네임", u["nickname"])
         badge = st.text_input("뱃지", u["badge"])
@@ -117,16 +115,16 @@ if st.session_state.get("show_profile"):
             u["badge"] = badge
             if avatar:
                 path = f"{AVATAR_DIR}/{st.session_state.current_user}.png"
-                with open(path, "wb") as f:
+                with open(path,"wb") as f:
                     f.write(avatar.getbuffer())
                 u["avatar"] = path
             save_json(USER_FILE, users)
-            st.session_state.show_profile = False
+            st.session_state.profile_open = False
             st.rerun()
 
-# ================== Write Post Modal ==================
-if st.session_state.get("show_write"):
-    with st.modal("게시물 작성"):
+# ================== Write ==================
+if st.session_state.write_open:
+    with st.dialog("게시물 작성"):
         title = st.text_input("제목")
         content = st.text_area("내용")
         image = st.file_uploader("사진 업로드", type=["png","jpg","jpeg"])
@@ -135,66 +133,69 @@ if st.session_state.get("show_write"):
             pinned = st.checkbox("📌 핀 고정 게시물")
 
         if st.button("게시물 업로드"):
-            post_img = None
+            img_path = None
             if image:
                 img_path = f"{DATA_DIR}/{image.name}"
-                with open(img_path, "wb") as f:
+                with open(img_path,"wb") as f:
                     f.write(image.getbuffer())
-                post_img = img_path
 
-            posts.insert(0, {
-                "title": title,
-                "content": content,
-                "author": st.session_state.current_user,
-                "image": post_img,
-                "pinned": pinned
+            posts.insert(0,{
+                "title":title,
+                "content":content,
+                "author":st.session_state.current_user,
+                "image":img_path,
+                "pinned":pinned
             })
             save_json(POST_FILE, posts)
-            st.session_state.show_write = False
+            st.session_state.write_open = False
             st.rerun()
 
-# ================== Edit Post Modal ==================
-if st.session_state.get("edit_index") is not None:
-    idx = st.session_state.edit_index
-    post = posts[idx]
-    with st.modal("게시물 수정"):
-        title = st.text_input("제목", post["title"])
-        content = st.text_area("내용", post["content"])
+# ================== Edit ==================
+if st.session_state.edit_idx is not None:
+    i = st.session_state.edit_idx
+    p = posts[i]
+    with st.dialog("게시물 수정"):
+        t = st.text_input("제목", p["title"])
+        c = st.text_area("내용", p["content"])
         if st.button("수정 완료"):
-            post["title"] = title
-            post["content"] = content
+            p["title"] = t
+            p["content"] = c
             save_json(POST_FILE, posts)
-            st.session_state.edit_index = None
+            st.session_state.edit_idx = None
             st.rerun()
 
-# ================== Post List ==================
+# ================== Posts ==================
 sorted_posts = sorted(
     enumerate(posts),
-    key=lambda x: x[1].get("pinned", False),
+    key=lambda x: x[1].get("pinned",False),
     reverse=True
 )
 
-for idx, p in sorted_posts:
+for idx,p in sorted_posts:
     st.markdown("---")
     u = users[p["author"]]
-    cols = st.columns([1, 7, 2])
-    with cols[0]:
+    l,m,r = st.columns([1,7,2])
+
+    with l:
         if u.get("avatar") and os.path.exists(u["avatar"]):
-            st.image(u["avatar"], width=50)
+            st.image(u["avatar"], width=48)
         else:
-            st.image("https://via.placeholder.com/50", width=50)
-    with cols[1]:
+            st.image("https://via.placeholder.com/48", width=48)
+
+    with m:
         pin = "📌 " if p.get("pinned") else ""
         st.markdown(f"{pin}**{p['title']}**")
         st.caption(f"{u['nickname']} {u['badge']}")
         st.write(p["content"])
         if p.get("image") and os.path.exists(p["image"]):
             st.image(p["image"], use_container_width=True)
-    with cols[2]:
+
+    with r:
         if st.session_state.logged_in and p["author"] == st.session_state.current_user:
-            if st.button("수정", key=f"edit{idx}"):
-                st.session_state.edit_index = idx
-            if st.button("삭제", key=f"del{idx}"):
+            if st.button("수정", key=f"e{idx}"):
+                st.session_state.edit_idx = idx
+            if st.button("삭제", key=f"d{idx}"):
                 posts.pop(idx)
                 save_json(POST_FILE, posts)
                 st.rerun()
+
