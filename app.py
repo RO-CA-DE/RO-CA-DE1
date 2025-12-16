@@ -118,7 +118,7 @@ if st.session_state.show_write:
     st.markdown("---")
     st.subheader("게시물 작성")
     title = st.text_input("제목")
-    content = st.text_area("내용", height=200)  # ✅ 여러 줄 OK
+    content = st.text_area("내용", height=200)
     image = st.file_uploader("사진 업로드", type=["png","jpg","jpeg"])
     pinned = False
     if users[st.session_state.current_user]["is_admin"]:
@@ -147,11 +147,11 @@ if st.session_state.show_write:
 # ================== Posts ==================
 sorted_posts = sorted(
     enumerate(posts),
-    key=lambda x: x[1].get("pinned",False),
+    key=lambda x: x[1].get("pinned", False),
     reverse=True
 )
 
-for idx,p in sorted_posts:
+for idx, p in sorted_posts:
     st.markdown("---")
     u = users[p["author"]]
 
@@ -177,16 +177,15 @@ for idx,p in sorted_posts:
     # ===== 펼쳐진 게시물 =====
     if st.session_state.open_post == idx:
         st.markdown("### " + p["title"])
-
-        # 줄바꿈 유지
         st.write(p["content"])
 
         if p.get("image") and os.path.exists(p["image"]):
             st.image(p["image"], use_container_width=True)
 
         st.markdown("#### 댓글")
-        for ci,c in enumerate(p["comments"]):
-            st.caption(f"{users.get(c['author'],{'nickname':'GUEST'})['nickname']}: {c['text']}")
+        for ci, c in enumerate(p.get("comments", [])):
+            name = users.get(c.get("author"), {"nickname":"GUEST"})["nickname"]
+            st.caption(f"{name}: {c.get('text','')}")
 
             if st.session_state.logged_in and users[st.session_state.current_user]["is_admin"]:
                 if st.button("댓글 삭제", key=f"cd{idx}{ci}"):
@@ -197,7 +196,7 @@ for idx,p in sorted_posts:
         author = st.session_state.current_user if st.session_state.logged_in else "GUEST"
         comment = st.text_input("댓글 작성", key=f"c{idx}")
         if st.button("등록", key=f"cb{idx}") and comment:
-            p["comments"].append({"author":author,"text":comment})
+            p.setdefault("comments", []).append({"author":author,"text":comment})
             save_json(POST_FILE, posts)
             st.rerun()
 
@@ -205,11 +204,11 @@ for idx,p in sorted_posts:
             st.markdown("#### 관리자 대댓글")
             reply = st.text_input("대댓글", key=f"r{idx}")
             if st.button("대댓글 등록", key=f"rb{idx}") and reply:
-                p["admin_replies"].append(reply)
+                p.setdefault("admin_replies", []).append(reply)
                 save_json(POST_FILE, posts)
                 st.rerun()
 
-        for r in p["admin_replies"]:
+        for r in p.get("admin_replies", []):
             st.caption(f"관리자 ▶ {r}")
 
 
