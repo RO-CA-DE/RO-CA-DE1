@@ -119,8 +119,9 @@ if st.session_state.show_write:
     st.markdown("---")
     st.subheader("게시물 작성")
     title = st.text_input("제목")
-    content = st.text_area("내용")
-    image = st.file_uploader("사진 업로드", type=["png","jpg","jpeg"])
+    # 여러 줄 입력 확실히 되는 text_area (높이 크게)
+    content = st.text_area("내용", height=200)
+    image = st.file_uploader("사진 업로드", type=["png","jpg","jpeg"], accept_multiple_files=False)
     pinned = False
     if users[st.session_state.current_user]["is_admin"]:
         pinned = st.checkbox("📌 핀 고정 게시물")
@@ -134,7 +135,7 @@ if st.session_state.show_write:
 
         posts.insert(0,{
             "title":title,
-            "content":content,
+            "content":content,  # 줄바꿈 그대로 저장
             "author":st.session_state.current_user,
             "image":img_path,
             "pinned":pinned,
@@ -145,6 +146,7 @@ if st.session_state.show_write:
         st.rerun()
 
 # ================== Posts ==================
+
 sorted_posts = sorted(
     enumerate(posts),
     key=lambda x: x[1].get("pinned",False),
@@ -177,22 +179,46 @@ for idx,p in sorted_posts:
                 save_json(POST_FILE, posts)
                 st.rerun()
 
-        # ---------- Opened Post ----------
+            # ---------- Opened Post (FULL OVERLAY) ----------
     if st.session_state.open_post == idx:
-        st.markdown("---")
-        if st.button("🏠 홈으로", key=f"home{idx}"):
-            st.session_state.open_post = None
-            st.rerun()
+        # 덮어쓰기용 CSS
+        st.markdown("""
+        <style>
+        .overlay {
+            position: fixed;
+            top: 0; left: 0;
+            width: 100vw; height: 100vh;
+            background: white;
+            z-index: 9999;
+            padding: 24px;
+            overflow-y: auto;
+        }
+        </style>
+        """, unsafe_allow_html=True)
 
-        st.write(p["content"])
+        st.markdown('<div class="overlay">', unsafe_allow_html=True)
+        colx, colh = st.columns([1,9])
+        with colx:
+            if st.button("❌", key=f"close{idx}"):
+                st.session_state.open_post = None
+                st.rerun()
+        with colh:
+            st.markdown(f"## {p['title']}")
+
+        # 줄바꿈 유지해서 출력
+        content_html = p["content"].replace("
+", "<br>")
+        st.markdown(content_html, unsafe_allow_html=True)
+
         if p.get("image") and os.path.exists(p["image"]):
             st.image(p["image"], use_container_width=True)
 
-        st.markdown("##### 댓글")
+        st.markdown("### 댓글")
         for ci,c in enumerate(p.get("comments",[])):
             row1,row2 = st.columns([8,2])
             with row1:
-                st.caption(f"{users.get(c['author'],{'nickname':'GUEST'})['nickname']}: {c['text']}")
+                name = users.get(c['author'],{'nickname':'GUEST'})['nickname']
+                st.caption(f"{name}: {c['text']}")
             with row2:
                 if st.session_state.logged_in and users[st.session_state.current_user]["is_admin"]:
                     if st.button("삭제", key=f"cd{idx}{ci}"):
@@ -200,21 +226,15 @@ for idx,p in sorted_posts:
                         save_json(POST_FILE, posts)
                         st.rerun()
 
-        # 댓글 작성 (비로그인 가능)
         author = st.session_state.current_user if st.session_state.logged_in else "GUEST"
         comment = st.text_input("댓글 작성", key=f"c{idx}")
         if st.button("등록", key=f"cb{idx}") and comment:
-            p["comments"].append({
-                "author": author,
-                "text": comment,
-                "reply": []
-            })
+            p["comments"].append({"author":author,"text":comment})
             save_json(POST_FILE, posts)
             st.rerun()
 
-        # 관리자 대댓글
         if st.session_state.logged_in and users[st.session_state.current_user]["is_admin"]:
-            st.markdown("##### 관리자 대댓글")
+            st.markdown("### 관리자 대댓글")
             reply = st.text_input("대댓글 작성", key=f"r{idx}")
             if st.button("대댓글 등록", key=f"rb{idx}") and reply:
                 p.setdefault("admin_replies",[]).append(reply)
@@ -224,4 +244,6 @@ for idx,p in sorted_posts:
         if p.get("admin_replies"):
             for r in p["admin_replies"]:
                 st.caption(f"관리자 ▶ {r}")
+
+        st.markdown('</div>', unsafe_allow_html=True)
 
