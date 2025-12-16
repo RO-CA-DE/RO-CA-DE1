@@ -32,18 +32,17 @@ users = load_json(USER_FILE, {
 posts = load_json(POST_FILE, [])
 
 # ================== Session ==================
-if "logged_in" not in st.session_state:
-    st.session_state.logged_in = False
-if "current_user" not in st.session_state:
-    st.session_state.current_user = None
-if "show_login" not in st.session_state:
-    st.session_state.show_login = False
-if "show_write" not in st.session_state:
-    st.session_state.show_write = False
-if "show_profile" not in st.session_state:
-    st.session_state.show_profile = False
-if "edit_idx" not in st.session_state:
-    st.session_state.edit_idx = None
+for k,v in {
+    "logged_in":False,
+    "current_user":None,
+    "show_login":False,
+    "show_write":False,
+    "show_profile":False,
+    "edit_idx":None,
+    "open_post":None
+}.items():
+    if k not in st.session_state:
+        st.session_state[k] = v
 
 # ================== Header ==================
 c1,c2,c3 = st.columns([6,1,1])
@@ -60,8 +59,8 @@ with c3:
             st.session_state.current_user = None
             st.rerun()
 
-# ================== LOGIN (NO MODAL) ==================
-if st.session_state.show_login and not st.session_state.logged_in:
+# ================== Login ==================
+if st.session_state.show_login:
     st.markdown("---")
     st.subheader("ARRIVE")
     uid = st.text_input("ID")
@@ -95,7 +94,7 @@ else:
     with b:
         st.selectbox("전체", ["전체"])
 
-# ================== PROFILE ==================
+# ================== Profile ==================
 if st.session_state.show_profile:
     st.markdown("---")
     st.subheader("계정 설정")
@@ -115,7 +114,7 @@ if st.session_state.show_profile:
         st.session_state.show_profile = False
         st.rerun()
 
-# ================== WRITE ==================
+# ================== Write ==================
 if st.session_state.show_write:
     st.markdown("---")
     st.subheader("게시물 작성")
@@ -138,13 +137,14 @@ if st.session_state.show_write:
             "content":content,
             "author":st.session_state.current_user,
             "image":img_path,
-            "pinned":pinned
+            "pinned":pinned,
+            "comments":[]
         })
         save_json(POST_FILE, posts)
         st.session_state.show_write = False
         st.rerun()
 
-# ================== POSTS ==================
+# ================== Posts ==================
 sorted_posts = sorted(
     enumerate(posts),
     key=lambda x: x[1].get("pinned",False),
@@ -155,18 +155,19 @@ for idx,p in sorted_posts:
     st.markdown("---")
     u = users[p["author"]]
     l,m,r = st.columns([1,7,2])
+
     with l:
         if u.get("avatar") and os.path.exists(u["avatar"]):
             st.image(u["avatar"], width=48)
         else:
             st.image("https://via.placeholder.com/48", width=48)
+
     with m:
         pin = "📌 " if p.get("pinned") else ""
-        st.markdown(f"{pin}**{p['title']}**")
+        if st.button(f"{pin}{p['title']}", key=f"open{idx}"):
+            st.session_state.open_post = idx
         st.caption(f"{u['nickname']} {u['badge']}")
-        st.write(p["content"])
-        if p.get("image") and os.path.exists(p["image"]):
-            st.image(p["image"], use_container_width=True)
+
     with r:
         if st.session_state.logged_in and p["author"] == st.session_state.current_user:
             if st.button("수정", key=f"e{idx}"):
@@ -175,3 +176,52 @@ for idx,p in sorted_posts:
                 posts.pop(idx)
                 save_json(POST_FILE, posts)
                 st.rerun()
+
+        # ---------- Opened Post ----------
+    if st.session_state.open_post == idx:
+        st.markdown("---")
+        if st.button("🏠 홈으로", key=f"home{idx}"):
+            st.session_state.open_post = None
+            st.rerun()
+
+        st.write(p["content"])
+        if p.get("image") and os.path.exists(p["image"]):
+            st.image(p["image"], use_container_width=True)
+
+        st.markdown("##### 댓글")
+        for ci,c in enumerate(p.get("comments",[])):
+            row1,row2 = st.columns([8,2])
+            with row1:
+                st.caption(f"{users.get(c['author'],{'nickname':'GUEST'})['nickname']}: {c['text']}")
+            with row2:
+                if st.session_state.logged_in and users[st.session_state.current_user]["is_admin"]:
+                    if st.button("삭제", key=f"cd{idx}{ci}"):
+                        p["comments"].pop(ci)
+                        save_json(POST_FILE, posts)
+                        st.rerun()
+
+        # 댓글 작성 (비로그인 가능)
+        author = st.session_state.current_user if st.session_state.logged_in else "GUEST"
+        comment = st.text_input("댓글 작성", key=f"c{idx}")
+        if st.button("등록", key=f"cb{idx}") and comment:
+            p["comments"].append({
+                "author": author,
+                "text": comment,
+                "reply": []
+            })
+            save_json(POST_FILE, posts)
+            st.rerun()
+
+        # 관리자 대댓글
+        if st.session_state.logged_in and users[st.session_state.current_user]["is_admin"]:
+            st.markdown("##### 관리자 대댓글")
+            reply = st.text_input("대댓글 작성", key=f"r{idx}")
+            if st.button("대댓글 등록", key=f"rb{idx}") and reply:
+                p.setdefault("admin_replies",[]).append(reply)
+                save_json(POST_FILE, posts)
+                st.rerun()
+
+        if p.get("admin_replies"):
+            for r in p["admin_replies"]:
+                st.caption(f"관리자 ▶ {r}")
+
