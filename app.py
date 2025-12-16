@@ -32,15 +32,14 @@ users = load_json(USER_FILE, {
 posts = load_json(POST_FILE, [])
 
 # ================== Session ==================
-defaults = {
+for k,v in {
     "logged_in": False,
     "current_user": None,
     "show_login": False,
     "show_write": False,
     "show_profile": False,
     "open_post": None
-}
-for k,v in defaults.items():
+}.items():
     if k not in st.session_state:
         st.session_state[k] = v
 
@@ -119,7 +118,7 @@ if st.session_state.show_write:
     st.markdown("---")
     st.subheader("게시물 작성")
     title = st.text_input("제목")
-    content = st.text_area("내용", height=200)  # 여러 줄 OK
+    content = st.text_area("내용", height=200)  # ✅ 여러 줄 OK
     image = st.file_uploader("사진 업로드", type=["png","jpg","jpeg"])
     pinned = False
     if users[st.session_state.current_user]["is_admin"]:
@@ -165,7 +164,7 @@ for idx,p in sorted_posts:
 
     with m:
         if st.button(p["title"], key=f"open{idx}"):
-            st.session_state.open_post = idx
+            st.session_state.open_post = idx if st.session_state.open_post != idx else None
         st.caption(f"{u['nickname']} {u['badge']}")
 
     with r:
@@ -175,38 +174,17 @@ for idx,p in sorted_posts:
                 save_json(POST_FILE, posts)
                 st.rerun()
 
-    # ================== Overlay ==================
+    # ===== 펼쳐진 게시물 =====
     if st.session_state.open_post == idx:
-        st.markdown("""
-        <style>
-        .overlay {
-            position: fixed;
-            top: 0; left: 0;
-            width: 100vw; height: 100vh;
-            background: white;
-            z-index: 9999;
-            padding: 24px;
-            overflow-y: auto;
-        }
-        </style>
-        """, unsafe_allow_html=True)
+        st.markdown("### " + p["title"])
 
-        st.markdown('<div class="overlay">', unsafe_allow_html=True)
-
-        if st.button("❌ 닫기"):
-            st.session_state.open_post = None
-            st.rerun()
-
-        st.markdown(f"## {p['title']}")
-
-        # 🔥 줄바꿈 유지 (에러 없음)
-        content_html = p["content"].replace("\n", "<br>")
-        st.markdown(content_html, unsafe_allow_html=True)
+        # 줄바꿈 유지
+        st.write(p["content"])
 
         if p.get("image") and os.path.exists(p["image"]):
             st.image(p["image"], use_container_width=True)
 
-        st.markdown("### 댓글")
+        st.markdown("#### 댓글")
         for ci,c in enumerate(p["comments"]):
             st.caption(f"{users.get(c['author'],{'nickname':'GUEST'})['nickname']}: {c['text']}")
 
@@ -224,7 +202,7 @@ for idx,p in sorted_posts:
             st.rerun()
 
         if st.session_state.logged_in and users[st.session_state.current_user]["is_admin"]:
-            st.markdown("### 관리자 대댓글")
+            st.markdown("#### 관리자 대댓글")
             reply = st.text_input("대댓글", key=f"r{idx}")
             if st.button("대댓글 등록", key=f"rb{idx}") and reply:
                 p["admin_replies"].append(reply)
@@ -234,6 +212,5 @@ for idx,p in sorted_posts:
         for r in p["admin_replies"]:
             st.caption(f"관리자 ▶ {r}")
 
-        st.markdown("</div>", unsafe_allow_html=True)
 
 
