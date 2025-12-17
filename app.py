@@ -12,7 +12,6 @@ body { background-color:#f5f5f5; }
     margin-bottom:20px;
 }
 .meta { color:#888; font-size:13px; margin-bottom:10px; }
-.pin { color:#e74c3c; font-weight:700; }
 button { border-radius:10px !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -32,6 +31,7 @@ def load(p,d):
         with open(p,"r",encoding="utf-8") as f:
             return json.load(f)
     return d
+
 def save(p,d):
     with open(p,"w",encoding="utf-8") as f:
         json.dump(d,f,ensure_ascii=False,indent=2)
@@ -83,7 +83,7 @@ if s.login_popup:
 
 # ================= TOP BAR =================
 st.divider()
-c1,c2,c3,c4=st.columns([3,2,2,2])
+c1,c2,c3,c4,c5,c6=st.columns([3,2,2,2,2,2])
 
 with c1:
     s.chapter=st.selectbox("게시물",chapters)
@@ -103,35 +103,15 @@ with c4:
         s.active_panel=None if s.active_panel=="profile" else "profile"
         s.write_popup=False
 
-# ================= CHAPTER MANAGE =================
-if s.active_panel=="chapter":
-    st.markdown("---")
-    st.subheader("챕터 관리")
-    new=st.text_input("새 챕터")
-    if st.button("추가") and new and new not in chapters:
-        chapters.append(new)
-        save(CHAPS,chapters)
-        st.rerun()
+with c5:
+    if s.login and st.button("로그인 설정"):
+        s.active_panel=None if s.active_panel=="login_setting" else "login_setting"
+        s.write_popup=False
 
-    for ch in chapters[:]:
-        if ch=="전체": continue
-        col1,col2=st.columns([4,1])
-        with col1:
-            rename=st.text_input("이름",ch,key=ch)
-        with col2:
-            if st.button("삭제",key=f"d{ch}"):
-                chapters.remove(ch)
-                for p in posts:
-                    if p["chapter"]==ch: p["chapter"]="전체"
-                save(CHAPS,chapters); save(POSTS,posts)
-                st.rerun()
-        if rename!=ch:
-            i=chapters.index(ch)
-            chapters[i]=rename
-            for p in posts:
-                if p["chapter"]==ch: p["chapter"]=rename
-            save(CHAPS,chapters); save(POSTS,posts)
-            st.rerun()
+with c6:
+    if s.login and st.button("계정 추가"):
+        s.active_panel=None if s.active_panel=="add_account" else "add_account"
+        s.write_popup=False
 
 # ================= PROFILE =================
 if s.active_panel=="profile":
@@ -151,13 +131,54 @@ if s.active_panel=="profile":
         s.active_panel=None
         st.rerun()
 
+# ================= LOGIN SETTING =================
+if s.active_panel=="login_setting":
+    st.markdown("---")
+    st.subheader("비밀번호 변경")
+    new_pw=st.text_input("새 비밀번호",type="password")
+    if st.button("변경"):
+        if new_pw:
+            users[s.user]["password"]=new_pw
+            save(USERS,users)
+            st.success("비밀번호 변경 완료")
+
+# ================= ADD ACCOUNT =================
+if s.active_panel=="add_account":
+    st.markdown("---")
+    st.subheader("계정 추가")
+    nid=st.text_input("새 ID")
+    npw=st.text_input("비밀번호",type="password")
+    nnick=st.text_input("닉네임")
+    nbadge=st.text_input("뱃지 (선택)")
+    navatar=st.file_uploader("프로필 사진",type=["png","jpg","jpeg"])
+
+    if st.button("계정 생성"):
+        if not nid or not npw or not nnick:
+            st.error("필수 항목 누락")
+        elif nid in users:
+            st.error("이미 존재하는 ID")
+        else:
+            avatar_path=None
+            if navatar:
+                avatar_path=f"{AVATARS}/{nid}.png"
+                with open(avatar_path,"wb") as f:
+                    f.write(navatar.getbuffer())
+            users[nid]={
+                "password":npw,
+                "nickname":nnick,
+                "badge":nbadge,
+                "avatar":avatar_path
+            }
+            save(USERS,users)
+            st.success("계정 생성 완료")
+
 # ================= WRITE =================
 if s.write_popup:
     st.markdown("---")
     t=st.text_input("제목")
     c=st.text_area("내용",height=200)
     ch=st.selectbox("챕터",chapters)
-    pinned=st.checkbox("📌 게시물 고정")
+    pin=st.checkbox("📌 게시물 고정")
     img=st.file_uploader("이미지",type=["png","jpg","jpeg"])
     if st.button("업로드"):
         img_path=None
@@ -167,33 +188,25 @@ if s.write_popup:
         posts.insert(0,{
             "title":t,"content":c,"chapter":ch,
             "author":s.user,"image":img_path,
-            "pinned":pinned,
-            "likes":[],"comments":[]
+            "pinned":pin,"likes":[],"comments":[]
         })
         save(POSTS,posts)
         s.write_popup=False
         st.rerun()
 
-# ================= POSTS (PIN SORT) =================
-sorted_posts = sorted(
-    posts,
-    key=lambda x: (not x.get("pinned",False), posts.index(x))
-)
+# ================= POSTS =================
+sorted_posts=sorted(posts,key=lambda x:(not x.get("pinned",False),posts.index(x)))
 
 for i,p in enumerate(sorted_posts):
     if s.chapter!="전체" and p["chapter"]!=s.chapter: continue
-
     st.markdown("<div class='post'>",unsafe_allow_html=True)
 
-    pin_mark = "📌 " if p.get("pinned") else ""
-    if st.button(pin_mark + p["title"],key=f"o{i}"):
+    title=("📌 " if p.get("pinned") else "")+p["title"]
+    if st.button(title,key=f"o{i}"):
         s.open_post=None if s.open_post==i else i
 
     u=users[p["author"]]
-    st.markdown(
-        f"<div class='meta'>[{p['chapter']}] {u['nickname']} {u['badge']}</div>",
-        unsafe_allow_html=True
-    )
+    st.markdown(f"<div class='meta'>[{p['chapter']}] {u['nickname']} {u['badge']}</div>",unsafe_allow_html=True)
 
     if s.open_post==i:
         st.write(p["content"])
@@ -209,26 +222,6 @@ for i,p in enumerate(sorted_posts):
         else:
             st.caption(f"❤️ {len(p['likes'])}")
 
-        if s.login and p["author"]==s.user:
-            if st.button("✏️ 수정",key=f"e{i}"):
-                s.active_panel=None if s.active_panel==f"edit{i}" else f"edit{i}"
-                s.edit_index=i
-                st.rerun()
-
-        if s.active_panel==f"edit{i}":
-            nt=st.text_input("제목 수정",p["title"])
-            nc=st.text_area("내용 수정",p["content"],height=200)
-            nch=st.selectbox("챕터 수정",chapters,index=chapters.index(p["chapter"]))
-            npin=st.checkbox("📌 고정",p.get("pinned",False))
-            if st.button("저장",key=f"s{i}"):
-                p["title"]=nt
-                p["content"]=nc
-                p["chapter"]=nch
-                p["pinned"]=npin
-                save(POSTS,posts)
-                s.active_panel=None
-                st.rerun()
-
         st.markdown("##### 댓글")
         for c in p["comments"]:
             st.caption(f"{c['author']}: {c['text']}")
@@ -238,10 +231,3 @@ for i,p in enumerate(sorted_posts):
             save(POSTS,posts); st.rerun()
 
     st.markdown("</div>",unsafe_allow_html=True)
-
-
-
-
-
-
-
