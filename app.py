@@ -1,15 +1,46 @@
 import streamlit as st
 import json, os
 
+# ================== BASIC STYLE ==================
+st.markdown("""
+<style>
+body {
+    background-color: #f6f6f6;
+}
+.block-container {
+    padding-top: 2rem;
+}
+.post-card {
+    background: white;
+    padding: 20px;
+    border-radius: 14px;
+    margin-bottom: 20px;
+}
+.post-title {
+    font-size: 20px;
+    font-weight: 700;
+}
+.post-meta {
+    color: #888;
+    font-size: 13px;
+    margin-bottom: 10px;
+}
+.like-btn {
+    border: none;
+    background: none;
+    font-size: 16px;
+    cursor: pointer;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # ================== Paths ==================
 DATA_DIR = "data"
 POST_FILE = f"{DATA_DIR}/posts.json"
 USER_FILE = f"{DATA_DIR}/users.json"
 CHAPTER_FILE = f"{DATA_DIR}/chapters.json"
-AVATAR_DIR = "avatars"
 
 os.makedirs(DATA_DIR, exist_ok=True)
-os.makedirs(AVATAR_DIR, exist_ok=True)
 
 # ================== Utils ==================
 def load_json(path, default):
@@ -24,8 +55,8 @@ def save_json(path, data):
 
 # ================== Data ==================
 users = load_json(USER_FILE, {
-    "ABLE": {"password":"1234","nickname":"ABLE_official","badge":"✔️","avatar":None,"is_admin":True},
-    "BAEKAHJIN": {"password":"1234","nickname":"BAEKAHJIN","badge":"","avatar":None,"is_admin":False}
+    "ABLE": {"password":"1234","nickname":"ABLE_official"},
+    "BAEKAHJIN": {"password":"1234","nickname":"BAEKAHJIN"}
 })
 
 posts = load_json(POST_FILE, [])
@@ -37,8 +68,7 @@ defaults = {
     "current_user": None,
     "show_login": False,
     "show_write": False,
-    "show_profile": False,
-    "show_chapter": False,
+    "show_edit": None,
     "selected_chapter": "전체",
     "open_post": None
 }
@@ -46,14 +76,14 @@ for k,v in defaults.items():
     st.session_state.setdefault(k, v)
 
 # ================== Header ==================
-c1,c2,c3 = st.columns([6,1,1])
-with c1:
+h1,h2,h3 = st.columns([6,1,1])
+with h1:
     st.markdown("## AOUSE")
-with c2:
+with h2:
     if not st.session_state.logged_in:
         if st.button("ARRIVE"):
             st.session_state.show_login = True
-with c3:
+with h3:
     if st.session_state.logged_in:
         if st.button("LOGOUT"):
             st.session_state.logged_in = False
@@ -63,12 +93,10 @@ with c3:
 # ================== Login ==================
 if st.session_state.show_login:
     st.markdown("---")
-    st.subheader("ARRIVE")
     uid = st.text_input("ID")
     pw = st.text_input("Password", type="password")
     if st.button("LOGIN"):
-        u = users.get(uid)
-        if u and u["password"] == pw:
+        if uid in users and users[uid]["password"] == pw:
             st.session_state.logged_in = True
             st.session_state.current_user = uid
             st.session_state.show_login = False
@@ -78,115 +106,49 @@ if st.session_state.show_login:
 
 # ================== Top Bar ==================
 st.divider()
-a,b,c,d = st.columns([3,2,2,2])
-
-with a:
-    selected = st.selectbox("게시물", chapters, index=chapters.index(st.session_state.selected_chapter))
-    st.session_state.selected_chapter = selected
-
-with b:
+c1,c2 = st.columns([3,2])
+with c1:
+    st.session_state.selected_chapter = st.selectbox("게시물", chapters)
+with c2:
     if st.session_state.logged_in:
         if st.button("게시물 쓰기"):
             st.session_state.show_write = True
 
-with c:
-    if st.session_state.logged_in:
-        if st.button("챕터 관리"):
-            st.session_state.show_chapter = True
-
-with d:
-    if st.session_state.logged_in:
-        if st.button("계정 설정"):
-            st.session_state.show_profile = True
-
-# ================== Chapter Admin ==================
-if st.session_state.show_chapter:
-    st.markdown("---")
-    st.subheader("챕터 관리")
-
-    if users[st.session_state.current_user]["is_admin"]:
-        new_ch = st.text_input("새 챕터")
-        if st.button("추가") and new_ch:
-            if new_ch not in chapters:
-                chapters.append(new_ch)
-                save_json(CHAPTER_FILE, chapters)
-                st.rerun()
-
-        for ch in list(chapters):
-            if ch == "전체": continue
-
-            c1,c2 = st.columns([4,1])
-            with c1:
-                rename = st.text_input(f"이름 수정 - {ch}", ch, key=f"r{ch}")
-            with c2:
-                if st.button("삭제", key=f"d{ch}"):
-                    chapters.remove(ch)
-                    for p in posts:
-                        if p.get("chapter") == ch:
-                            p["chapter"] = "전체"
-                    save_json(CHAPTER_FILE, chapters)
-                    save_json(POST_FILE, posts)
-                    st.rerun()
-
-            if rename != ch:
-                i = chapters.index(ch)
-                chapters[i] = rename
-                for p in posts:
-                    if p.get("chapter") == ch:
-                        p["chapter"] = rename
-                save_json(CHAPTER_FILE, chapters)
-                save_json(POST_FILE, posts)
-                st.rerun()
-    else:
-        st.caption("관리자만 수정 가능")
-
-# ================== Profile ==================
-if st.session_state.show_profile:
-    st.markdown("---")
-    u = users[st.session_state.current_user]
-    nickname = st.text_input("닉네임", u["nickname"])
-    badge = st.text_input("뱃지", u["badge"])
-    avatar = st.file_uploader("프로필 사진", type=["png","jpg","jpeg"])
-    if st.button("저장"):
-        u["nickname"] = nickname
-        u["badge"] = badge
-        if avatar:
-            path = f"{AVATAR_DIR}/{st.session_state.current_user}.png"
-            with open(path,"wb") as f:
-                f.write(avatar.getbuffer())
-            u["avatar"] = path
-        save_json(USER_FILE, users)
-        st.session_state.show_profile = False
-        st.rerun()
-
 # ================== Write ==================
 if st.session_state.show_write:
     st.markdown("---")
-    st.subheader("게시물 작성")
-
     title = st.text_input("제목")
     content = st.text_area("내용", height=200)
     chapter = st.selectbox("챕터", chapters)
-    image = st.file_uploader("사진 업로드", type=["png","jpg","jpeg"])
 
     if st.button("업로드"):
-        img_path = None
-        if image:
-            img_path = f"{DATA_DIR}/{image.name}"
-            with open(img_path,"wb") as f:
-                f.write(image.getbuffer())
-
         posts.insert(0,{
             "title": title,
             "content": content,
-            "author": st.session_state.current_user,
             "chapter": chapter,
-            "image": img_path,
-            "comments": [],
-            "admin_replies": []
+            "author": st.session_state.current_user,
+            "likes": [],
+            "comments": []
         })
         save_json(POST_FILE, posts)
         st.session_state.show_write = False
+        st.rerun()
+
+# ================== Edit ==================
+if st.session_state.show_edit is not None:
+    p = posts[st.session_state.show_edit]
+    st.markdown("---")
+    st.subheader("게시물 수정")
+    title = st.text_input("제목", p["title"])
+    content = st.text_area("내용", p["content"], height=200)
+    chapter = st.selectbox("챕터", chapters, index=chapters.index(p.get("chapter","전체")))
+
+    if st.button("저장"):
+        p["title"] = title
+        p["content"] = content
+        p["chapter"] = chapter
+        save_json(POST_FILE, posts)
+        st.session_state.show_edit = None
         st.rerun()
 
 # ================== Posts ==================
@@ -195,31 +157,55 @@ for idx, p in enumerate(posts):
     if st.session_state.selected_chapter != "전체" and p.get("chapter","전체") != st.session_state.selected_chapter:
         continue
 
-    st.markdown("---")
-    if st.button(p["title"], key=f"open{idx}"):
+    st.markdown("<div class='post-card'>", unsafe_allow_html=True)
+
+    if st.button(p["title"], key=f"o{idx}"):
         st.session_state.open_post = idx if st.session_state.open_post != idx else None
 
-    author = users.get(p["author"], {"nickname":"GUEST","badge":""})
-    st.caption(f"[{p.get('chapter','전체')}] {author['nickname']} {author['badge']}")
+    st.markdown(
+        f"<div class='post-meta'>[{p.get('chapter','전체')}] {users[p['author']]['nickname']}</div>",
+        unsafe_allow_html=True
+    )
 
     if st.session_state.open_post == idx:
         st.write(p["content"])
 
-        if p.get("image") and os.path.exists(p["image"]):
-            st.image(p["image"], use_container_width=True)
+        # ❤️ Like
+        user = st.session_state.current_user
+        likes = p.setdefault("likes", [])
+        liked = user in likes if user else False
+
+        if st.session_state.logged_in:
+            if st.button(f"{'❤️' if liked else '🤍'} {len(likes)}", key=f"l{idx}"):
+                if liked:
+                    likes.remove(user)
+                else:
+                    likes.append(user)
+                save_json(POST_FILE, posts)
+                st.rerun()
+        else:
+            st.caption(f"❤️ {len(likes)}")
+
+        # ✏️ Edit
+        if st.session_state.logged_in and p["author"] == user:
+            if st.button("✏️ 수정", key=f"e{idx}"):
+                st.session_state.show_edit = idx
+                st.rerun()
 
         st.markdown("#### 댓글")
-        for ci, c in enumerate(p.get("comments", [])):
-            st.caption(f"{c.get('author','GUEST')}: {c.get('text','')}")
+        for c in p.get("comments", []):
+            st.caption(f"{c['author']}: {c['text']}")
 
         txt = st.text_input("댓글 작성", key=f"c{idx}")
         if st.button("등록", key=f"cb{idx}") and txt:
             p.setdefault("comments", []).append({
-                "author": st.session_state.current_user or "GUEST",
+                "author": user or "GUEST",
                 "text": txt
             })
             save_json(POST_FILE, posts)
             st.rerun()
+
+    st.markdown("</div>", unsafe_allow_html=True)
 
 
 
