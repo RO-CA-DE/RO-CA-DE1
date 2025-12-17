@@ -12,6 +12,7 @@ body { background-color:#f5f5f5; }
     margin-bottom:20px;
 }
 .meta { color:#888; font-size:13px; margin-bottom:10px; }
+.pin { color:#e74c3c; font-weight:700; }
 button { border-radius:10px !important; }
 </style>
 """, unsafe_allow_html=True)
@@ -48,8 +49,7 @@ s.setdefault("login",False)
 s.setdefault("user",None)
 s.setdefault("login_popup",False)
 s.setdefault("write_popup",False)
-s.setdefault("active_panel",None)   # profile / chapter / edit
-s.setdefault("edit_index",None)
+s.setdefault("active_panel",None)
 s.setdefault("open_post",None)
 s.setdefault("chapter","전체")
 
@@ -157,6 +157,7 @@ if s.write_popup:
     t=st.text_input("제목")
     c=st.text_area("내용",height=200)
     ch=st.selectbox("챕터",chapters)
+    pinned=st.checkbox("📌 게시물 고정")
     img=st.file_uploader("이미지",type=["png","jpg","jpeg"])
     if st.button("업로드"):
         img_path=None
@@ -166,29 +167,39 @@ if s.write_popup:
         posts.insert(0,{
             "title":t,"content":c,"chapter":ch,
             "author":s.user,"image":img_path,
+            "pinned":pinned,
             "likes":[],"comments":[]
         })
         save(POSTS,posts)
         s.write_popup=False
         st.rerun()
 
-# ================= POSTS =================
-for i,p in enumerate(posts):
+# ================= POSTS (PIN SORT) =================
+sorted_posts = sorted(
+    posts,
+    key=lambda x: (not x.get("pinned",False), posts.index(x))
+)
+
+for i,p in enumerate(sorted_posts):
     if s.chapter!="전체" and p["chapter"]!=s.chapter: continue
+
     st.markdown("<div class='post'>",unsafe_allow_html=True)
 
-    if st.button(p["title"],key=f"o{i}"):
+    pin_mark = "📌 " if p.get("pinned") else ""
+    if st.button(pin_mark + p["title"],key=f"o{i}"):
         s.open_post=None if s.open_post==i else i
 
     u=users[p["author"]]
-    st.markdown(f"<div class='meta'>[{p['chapter']}] {u['nickname']} {u['badge']}</div>",unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='meta'>[{p['chapter']}] {u['nickname']} {u['badge']}</div>",
+        unsafe_allow_html=True
+    )
 
     if s.open_post==i:
         st.write(p["content"])
         if p["image"] and os.path.exists(p["image"]):
             st.image(p["image"],use_container_width=True)
 
-        # ❤️ LIKE
         if s.login:
             liked=s.user in p["likes"]
             if st.button(("❤️" if liked else "🤍")+f" {len(p['likes'])}",key=f"l{i}"):
@@ -198,7 +209,6 @@ for i,p in enumerate(posts):
         else:
             st.caption(f"❤️ {len(p['likes'])}")
 
-        # ✏️ EDIT TOGGLE
         if s.login and p["author"]==s.user:
             if st.button("✏️ 수정",key=f"e{i}"):
                 s.active_panel=None if s.active_panel==f"edit{i}" else f"edit{i}"
@@ -209,8 +219,12 @@ for i,p in enumerate(posts):
             nt=st.text_input("제목 수정",p["title"])
             nc=st.text_area("내용 수정",p["content"],height=200)
             nch=st.selectbox("챕터 수정",chapters,index=chapters.index(p["chapter"]))
+            npin=st.checkbox("📌 고정",p.get("pinned",False))
             if st.button("저장",key=f"s{i}"):
-                p["title"]=nt; p["content"]=nc; p["chapter"]=nch
+                p["title"]=nt
+                p["content"]=nc
+                p["chapter"]=nch
+                p["pinned"]=npin
                 save(POSTS,posts)
                 s.active_panel=None
                 st.rerun()
@@ -224,6 +238,7 @@ for i,p in enumerate(posts):
             save(POSTS,posts); st.rerun()
 
     st.markdown("</div>",unsafe_allow_html=True)
+
 
 
 
