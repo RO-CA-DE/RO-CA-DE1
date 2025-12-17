@@ -1,5 +1,5 @@
 import streamlit as st
-import json, os, uuid
+import json, os
 
 # ================= BASIC =================
 st.set_page_config(page_title="AOUSE", layout="centered")
@@ -8,7 +8,9 @@ DATA="data"
 POSTS=f"{DATA}/posts.json"
 USERS=f"{DATA}/users.json"
 CHAPS=f"{DATA}/chapters.json"
+AVATARS="avatars"
 os.makedirs(DATA, exist_ok=True)
+os.makedirs(AVATARS, exist_ok=True)
 
 def load(p, d):
     if os.path.exists(p):
@@ -20,18 +22,16 @@ def save(p, d):
     with open(p,"w",encoding="utf-8") as f:
         json.dump(d,f,ensure_ascii=False,indent=2)
 
-# ================= DATA =================
-users = load(USERS,{
-    "ABLE":{"password":"1234","nickname":"ABLE_official","badge":"✔️"}
+users = load(USERS, {
+    "ABLE":{"password":"1234","nickname":"ABLE_official","badge":"✔️","avatar":None}
 })
-posts = load(POSTS,[])
-chapters = load(CHAPS,["전체"])
+posts = load(POSTS, [])
+chapters = load(CHAPS, ["전체"])
 
-# ================= SESSION =================
-s=st.session_state
+s = st.session_state
 for k,v in {
     "login":False,"user":None,"panel":None,
-    "write":False,"edit":None,"open":None,"chapter":"전체"
+    "write":False,"open":None,"chapter":"전체"
 }.items():
     s.setdefault(k,v)
 
@@ -52,96 +52,106 @@ if s.panel=="login":
     if st.button("LOGIN"):
         if uid in users and users[uid]["password"]==pw:
             s.login=True; s.user=uid; s.panel=None; st.rerun()
-        else: st.error("로그인 실패")
+        else: st.error("실패")
 
 # ================= TOP =================
 st.divider()
-c1,c2,c3=st.columns(3)
+c1,c2,c3,c4,c5,c6=st.columns(6)
 with c1: s.chapter=st.selectbox("게시물",chapters)
 with c2:
     if s.login and st.button("게시물 쓰기"):
-        s.write=not s.write; s.edit=None
+        s.write=not s.write; s.panel=None
 with c3:
+    if s.login and st.button("챕터 관리"):
+        s.panel=None if s.panel=="chapter" else "chapter"; s.write=False
+with c4:
     if s.login and st.button("계정 설정"):
         s.panel=None if s.panel=="profile" else "profile"; s.write=False
+with c5:
+    if s.login and st.button("로그인 설정"):
+        s.panel=None if s.panel=="login_set" else "login_set"; s.write=False
+with c6:
+    if s.login and st.button("계정 추가"):
+        s.panel=None if s.panel=="add" else "add"; s.write=False
+
+# ================= CHAPTER =================
+if s.panel=="chapter":
+    st.subheader("📁 챕터 관리")
+    new=st.text_input("새 챕터")
+    if st.button("추가") and new and new not in chapters:
+        chapters.append(new); save(CHAPS,chapters); st.rerun()
+    for c in chapters[1:]:
+        col1,col2=st.columns([4,1])
+        col1.write(c)
+        if col2.button("삭제",key=c):
+            chapters.remove(c); save(CHAPS,chapters); st.rerun()
+
+# ================= PROFILE =================
+if s.panel=="profile":
+    u=users[s.user]
+    n=st.text_input("닉네임",u["nickname"])
+    b=st.text_input("뱃지",u["badge"])
+    if st.button("저장"):
+        u["nickname"]=n; u["badge"]=b
+        save(USERS,users); s.panel=None; st.rerun()
+
+# ================= LOGIN SET =================
+if s.panel=="login_set":
+    nid=st.text_input("새 ID",s.user)
+    npw=st.text_input("새 PW",type="password")
+    if st.button("변경"):
+        if nid!=s.user and nid in users:
+            st.error("ID 중복")
+        else:
+            old=s.user
+            if nid!=old:
+                users[nid]=users.pop(old)
+                for p in posts:
+                    if p["author"]==old: p["author"]=nid
+                    p["likes"]=[nid if x==old else x for x in p["likes"]]
+                    for c in p["comments"]:
+                        if c["author"]==old: c["author"]=nid
+                s.user=nid
+            if npw: users[s.user]["password"]=npw
+            save(USERS,users); save(POSTS,posts)
+            s.panel=None; st.rerun()
+
+# ================= ADD ACCOUNT =================
+if s.panel=="add":
+    i=st.text_input("ID")
+    p=st.text_input("PW",type="password")
+    n=st.text_input("닉네임")
+    if st.button("생성") and i and p and n:
+        if i in users: st.error("중복")
+        else:
+            users[i]={"password":p,"nickname":n,"badge":"","avatar":None}
+            save(USERS,users); st.success("완료")
 
 # ================= WRITE =================
 if s.write:
-    st.subheader("게시물 작성")
     t=st.text_input("제목")
     c=st.text_area("내용",height=200)
     ch=st.selectbox("챕터",chapters)
     pin=st.checkbox("📌 고정")
-    img=st.file_uploader("사진 업로드",type=["png","jpg","jpeg"])
-
     if st.button("업로드"):
-        img_path=None
-        if img:
-            img_path=f"{DATA}/{uuid.uuid4()}_{img.name}"
-            with open(img_path,"wb") as f: f.write(img.getbuffer())
-
         posts.insert(0,{
-            "id":str(uuid.uuid4()),
-            "title":t,"content":c,"chapter":ch,
-            "author":s.user,"pinned":pin,
-            "image":img_path,"likes":[],"comments":[]
+            "title":t,"content":c,"chapter":ch,"author":s.user,
+            "pinned":pin,"likes":[],"comments":[],"image":None
         })
-        save(POSTS,posts)
-        s.write=False
-        st.rerun()
+        save(POSTS,posts); s.write=False; st.rerun()
 
 # ================= POSTS =================
-posts=sorted(posts,key=lambda x:(not x["pinned"]))
+posts=sorted(posts,key=lambda x:(not x.get("pinned",False)))
 for i,p in enumerate(posts):
     if s.chapter!="전체" and p["chapter"]!=s.chapter: continue
-
-    if st.button(("📌 " if p["pinned"] else "")+p["title"],key=p["id"]):
-        s.open=None if s.open==p["id"] else p["id"]
-        s.edit=None
-
-    if s.open==p["id"]:
-        st.markdown(f"**작성자:** {p['author']}")
+    if st.button(("📌 " if p["pinned"] else "")+p["title"],key=i):
+        s.open=None if s.open==i else i
+    if s.open==i:
         st.write(p["content"])
-
-        if p["image"] and os.path.exists(p["image"]):
-            st.image(p["image"],use_container_width=True)
-
-        # ===== 수정 버튼 =====
-        if s.login and p["author"]==s.user and st.button("✏️ 수정"):
-            s.edit=p["id"]
-
-        # ===== 삭제 버튼 =====
-        if s.login and p["author"]==s.user and st.button("🗑 삭제"):
-            posts.remove(p); save(POSTS,posts); s.open=None; st.rerun()
-
-        # ===== 수정 모드 =====
-        if s.edit==p["id"]:
-            st.markdown("### 게시물 수정")
-            nt=st.text_input("제목",p["title"])
-            nc=st.text_area("내용",p["content"],height=200)
-            nch=st.selectbox("챕터",chapters,index=chapters.index(p["chapter"]))
-            npin=st.checkbox("📌 고정",p["pinned"])
-            nimg=st.file_uploader("사진 변경",type=["png","jpg","jpeg"])
-
-            if st.button("저장"):
-                p["title"]=nt
-                p["content"]=nc
-                p["chapter"]=nch
-                p["pinned"]=npin
-
-                if nimg:
-                    path=f"{DATA}/{uuid.uuid4()}_{nimg.name}"
-                    with open(path,"wb") as f: f.write(nimg.getbuffer())
-                    p["image"]=path
-
-                save(POSTS,posts)
-                s.edit=None
-                st.rerun()
-
-        # ===== 댓글 =====
-        st.markdown("##### 댓글")
-        for c in p["comments"]:
-            st.caption(f"{c['author']}: {c['text']}")
+        if s.login and p["author"]==s.user:
+            if st.button("삭제",key=f"d{i}"):
+                posts.remove(p); save(POSTS,posts); s.open=None; st.rerun()
+        st.write("❤️",len(p["likes"]))
         txt=st.text_input("댓글",key=f"c{i}")
         if st.button("등록",key=f"cb{i}") and txt:
             p["comments"].append({"author":s.user or "GUEST","text":txt})
