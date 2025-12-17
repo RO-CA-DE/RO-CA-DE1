@@ -11,72 +11,67 @@ body { background-color:#f5f5f5; }
     border-radius:14px;
     margin-bottom:20px;
 }
-.title { font-size:20px; font-weight:700; }
 .meta { color:#888; font-size:13px; margin-bottom:10px; }
 button { border-radius:10px !important; }
 </style>
 """, unsafe_allow_html=True)
 
 # ================= PATH =================
-DATA = "data"
-POSTS = f"{DATA}/posts.json"
-USERS = f"{DATA}/users.json"
-CHAPS = f"{DATA}/chapters.json"
-AVATARS = "avatars"
-
-os.makedirs(DATA, exist_ok=True)
-os.makedirs(AVATARS, exist_ok=True)
+DATA="data"
+POSTS=f"{DATA}/posts.json"
+USERS=f"{DATA}/users.json"
+CHAPS=f"{DATA}/chapters.json"
+AVATARS="avatars"
+os.makedirs(DATA,exist_ok=True)
+os.makedirs(AVATARS,exist_ok=True)
 
 # ================= UTILS =================
-def load(p, d):
+def load(p,d):
     if os.path.exists(p):
         with open(p,"r",encoding="utf-8") as f:
             return json.load(f)
     return d
-
-def save(p, d):
+def save(p,d):
     with open(p,"w",encoding="utf-8") as f:
         json.dump(d,f,ensure_ascii=False,indent=2)
 
 # ================= DATA =================
-users = load(USERS,{
+users=load(USERS,{
     "ABLE":{"password":"1234","nickname":"ABLE_official","badge":"✔️","avatar":None}
 })
-posts = load(POSTS,[])
-chapters = load(CHAPS,["전체"])
+posts=load(POSTS,[])
+chapters=load(CHAPS,["전체"])
 
 # ================= SESSION =================
-s = st.session_state
+s=st.session_state
 s.setdefault("login",False)
 s.setdefault("user",None)
 s.setdefault("login_popup",False)
 s.setdefault("write_popup",False)
-s.setdefault("edit_post",None)
+s.setdefault("active_panel",None)   # profile / chapter / edit
+s.setdefault("edit_index",None)
 s.setdefault("open_post",None)
 s.setdefault("chapter","전체")
-s.setdefault("profile",False)
-s.setdefault("chapter_manage",False)
 
 # ================= HEADER =================
-h1,h2,h3 = st.columns([6,1,1])
+h1,h2,h3=st.columns([6,1,1])
 with h1:
     st.markdown("## AOUSE")
 with h2:
-    if not s.login:
-        if st.button("ARRIVE"):
-            s.login_popup = True
+    if not s.login and st.button("ARRIVE"):
+        s.login_popup=True
 with h3:
-    if s.login:
-        if st.button("LOGOUT"):
-            s.login=False
-            s.user=None
-            st.rerun()
+    if s.login and st.button("LOGOUT"):
+        s.login=False
+        s.user=None
+        s.active_panel=None
+        st.rerun()
 
 # ================= LOGIN =================
 if s.login_popup:
     st.markdown("---")
-    uid = st.text_input("ID")
-    pw = st.text_input("Password",type="password")
+    uid=st.text_input("ID")
+    pw=st.text_input("Password",type="password")
     if st.button("LOGIN"):
         if uid in users and users[uid]["password"]==pw:
             s.login=True
@@ -88,28 +83,31 @@ if s.login_popup:
 
 # ================= TOP BAR =================
 st.divider()
-c1,c2,c3,c4 = st.columns([3,2,2,2])
+c1,c2,c3,c4=st.columns([3,2,2,2])
 
 with c1:
-    s.chapter = st.selectbox("게시물",chapters)
+    s.chapter=st.selectbox("게시물",chapters)
 
 with c2:
     if s.login and st.button("게시물 쓰기"):
-        s.write_popup=True
+        s.write_popup=not s.write_popup
+        s.active_panel=None
 
 with c3:
     if s.login and st.button("챕터 관리"):
-        s.chapter_manage=True
+        s.active_panel=None if s.active_panel=="chapter" else "chapter"
+        s.write_popup=False
 
 with c4:
     if s.login and st.button("계정 설정"):
-        s.profile=True
+        s.active_panel=None if s.active_panel=="profile" else "profile"
+        s.write_popup=False
 
 # ================= CHAPTER MANAGE =================
-if s.chapter_manage:
+if s.active_panel=="chapter":
     st.markdown("---")
     st.subheader("챕터 관리")
-    new = st.text_input("새 챕터")
+    new=st.text_input("새 챕터")
     if st.button("추가") and new and new not in chapters:
         chapters.append(new)
         save(CHAPS,chapters)
@@ -117,9 +115,9 @@ if s.chapter_manage:
 
     for ch in chapters[:]:
         if ch=="전체": continue
-        col1,col2 = st.columns([4,1])
+        col1,col2=st.columns([4,1])
         with col1:
-            rename = st.text_input("이름",ch,key=ch)
+            rename=st.text_input("이름",ch,key=ch)
         with col2:
             if st.button("삭제",key=f"d{ch}"):
                 chapters.remove(ch)
@@ -136,12 +134,12 @@ if s.chapter_manage:
             st.rerun()
 
 # ================= PROFILE =================
-if s.profile:
+if s.active_panel=="profile":
     st.markdown("---")
-    u = users[s.user]
-    nick = st.text_input("닉네임",u["nickname"])
-    badge = st.text_input("뱃지",u["badge"])
-    avatar = st.file_uploader("프로필 사진",type=["png","jpg","jpeg"])
+    u=users[s.user]
+    nick=st.text_input("닉네임",u["nickname"])
+    badge=st.text_input("뱃지",u["badge"])
+    avatar=st.file_uploader("프로필 사진",type=["png","jpg","jpeg"])
     if st.button("저장"):
         u["nickname"]=nick
         u["badge"]=badge
@@ -150,7 +148,7 @@ if s.profile:
             with open(path,"wb") as f: f.write(avatar.getbuffer())
             u["avatar"]=path
         save(USERS,users)
-        s.profile=False
+        s.active_panel=None
         st.rerun()
 
 # ================= WRITE =================
@@ -177,10 +175,10 @@ if s.write_popup:
 # ================= POSTS =================
 for i,p in enumerate(posts):
     if s.chapter!="전체" and p["chapter"]!=s.chapter: continue
-
     st.markdown("<div class='post'>",unsafe_allow_html=True)
+
     if st.button(p["title"],key=f"o{i}"):
-        s.open_post = None if s.open_post==i else i
+        s.open_post=None if s.open_post==i else i
 
     u=users[p["author"]]
     st.markdown(f"<div class='meta'>[{p['chapter']}] {u['nickname']} {u['badge']}</div>",unsafe_allow_html=True)
@@ -192,7 +190,7 @@ for i,p in enumerate(posts):
 
         # ❤️ LIKE
         if s.login:
-            liked = s.user in p["likes"]
+            liked=s.user in p["likes"]
             if st.button(("❤️" if liked else "🤍")+f" {len(p['likes'])}",key=f"l{i}"):
                 if liked: p["likes"].remove(s.user)
                 else: p["likes"].append(s.user)
@@ -200,10 +198,22 @@ for i,p in enumerate(posts):
         else:
             st.caption(f"❤️ {len(p['likes'])}")
 
-        # ✏️ EDIT
+        # ✏️ EDIT TOGGLE
         if s.login and p["author"]==s.user:
             if st.button("✏️ 수정",key=f"e{i}"):
-                s.edit_post=i; st.rerun()
+                s.active_panel=None if s.active_panel==f"edit{i}" else f"edit{i}"
+                s.edit_index=i
+                st.rerun()
+
+        if s.active_panel==f"edit{i}":
+            nt=st.text_input("제목 수정",p["title"])
+            nc=st.text_area("내용 수정",p["content"],height=200)
+            nch=st.selectbox("챕터 수정",chapters,index=chapters.index(p["chapter"]))
+            if st.button("저장",key=f"s{i}"):
+                p["title"]=nt; p["content"]=nc; p["chapter"]=nch
+                save(POSTS,posts)
+                s.active_panel=None
+                st.rerun()
 
         st.markdown("##### 댓글")
         for c in p["comments"]:
@@ -214,6 +224,7 @@ for i,p in enumerate(posts):
             save(POSTS,posts); st.rerun()
 
     st.markdown("</div>",unsafe_allow_html=True)
+
 
 
 
