@@ -113,65 +113,6 @@ with c6:
         s.active_panel=None if s.active_panel=="add_account" else "add_account"
         s.write_popup=False
 
-# ================= PROFILE =================
-if s.active_panel=="profile":
-    st.markdown("---")
-    u=users[s.user]
-    nick=st.text_input("닉네임",u["nickname"])
-    badge=st.text_input("뱃지",u["badge"])
-    avatar=st.file_uploader("프로필 사진",type=["png","jpg","jpeg"])
-    if st.button("저장"):
-        u["nickname"]=nick
-        u["badge"]=badge
-        if avatar:
-            path=f"{AVATARS}/{s.user}.png"
-            with open(path,"wb") as f: f.write(avatar.getbuffer())
-            u["avatar"]=path
-        save(USERS,users)
-        s.active_panel=None
-        st.rerun()
-
-# ================= LOGIN SETTING =================
-if s.active_panel=="login_setting":
-    st.markdown("---")
-    st.subheader("비밀번호 변경")
-    new_pw=st.text_input("새 비밀번호",type="password")
-    if st.button("변경"):
-        if new_pw:
-            users[s.user]["password"]=new_pw
-            save(USERS,users)
-            st.success("비밀번호 변경 완료")
-
-# ================= ADD ACCOUNT =================
-if s.active_panel=="add_account":
-    st.markdown("---")
-    st.subheader("계정 추가")
-    nid=st.text_input("새 ID")
-    npw=st.text_input("비밀번호",type="password")
-    nnick=st.text_input("닉네임")
-    nbadge=st.text_input("뱃지 (선택)")
-    navatar=st.file_uploader("프로필 사진",type=["png","jpg","jpeg"])
-
-    if st.button("계정 생성"):
-        if not nid or not npw or not nnick:
-            st.error("필수 항목 누락")
-        elif nid in users:
-            st.error("이미 존재하는 ID")
-        else:
-            avatar_path=None
-            if navatar:
-                avatar_path=f"{AVATARS}/{nid}.png"
-                with open(avatar_path,"wb") as f:
-                    f.write(navatar.getbuffer())
-            users[nid]={
-                "password":npw,
-                "nickname":nnick,
-                "badge":nbadge,
-                "avatar":avatar_path
-            }
-            save(USERS,users)
-            st.success("계정 생성 완료")
-
 # ================= WRITE =================
 if s.write_popup:
     st.markdown("---")
@@ -198,36 +139,57 @@ if s.write_popup:
 sorted_posts=sorted(posts,key=lambda x:(not x.get("pinned",False),posts.index(x)))
 
 for i,p in enumerate(sorted_posts):
-    if s.chapter!="전체" and p["chapter"]!=s.chapter: continue
+    if s.chapter!="전체" and p["chapter"]!=s.chapter:
+        continue
+
     st.markdown("<div class='post'>",unsafe_allow_html=True)
 
-    title=("📌 " if p.get("pinned") else "")+p["title"]
+    title=("📌 " if p.get("pinned") else "") + p["title"]
     if st.button(title,key=f"o{i}"):
         s.open_post=None if s.open_post==i else i
 
     u=users[p["author"]]
-    st.markdown(f"<div class='meta'>[{p['chapter']}] {u['nickname']} {u['badge']}</div>",unsafe_allow_html=True)
+    st.markdown(
+        f"<div class='meta'>[{p['chapter']}] {u['nickname']} {u['badge']}</div>",
+        unsafe_allow_html=True
+    )
 
     if s.open_post==i:
         st.write(p["content"])
         if p["image"] and os.path.exists(p["image"]):
             st.image(p["image"],use_container_width=True)
 
+        # ❤️ 좋아요
         if s.login:
             liked=s.user in p["likes"]
             if st.button(("❤️" if liked else "🤍")+f" {len(p['likes'])}",key=f"l{i}"):
-                if liked: p["likes"].remove(s.user)
-                else: p["likes"].append(s.user)
-                save(POSTS,posts); st.rerun()
+                if liked:
+                    p["likes"].remove(s.user)
+                else:
+                    p["likes"].append(s.user)
+                save(POSTS,posts)
+                st.rerun()
         else:
             st.caption(f"❤️ {len(p['likes'])}")
 
+        # 🗑 본인 글 삭제
+        if s.login and p["author"]==s.user:
+            if st.button("🗑 게시물 삭제",key=f"d{i}"):
+                posts.remove(p)
+                save(POSTS,posts)
+                s.open_post=None
+                st.rerun()
+
+        # 💬 댓글
         st.markdown("##### 댓글")
         for c in p["comments"]:
             st.caption(f"{c['author']}: {c['text']}")
         txt=st.text_input("댓글",key=f"c{i}")
         if st.button("등록",key=f"cb{i}") and txt:
             p["comments"].append({"author":s.user or "GUEST","text":txt})
-            save(POSTS,posts); st.rerun()
+            save(POSTS,posts)
+            st.rerun()
 
     st.markdown("</div>",unsafe_allow_html=True)
+
+
