@@ -32,21 +32,27 @@ if not os.path.exists(USER_FILE):
         }, f, ensure_ascii=False)
 
 # ================= LOAD =================
-messages = json.load(open(MSG_FILE, encoding="utf-8"))
-users = json.load(open(USER_FILE, encoding="utf-8"))
-admin = users["admin"]
+with open(MSG_FILE, encoding="utf-8") as f:
+    messages = json.load(f)
+with open(USER_FILE, encoding="utf-8") as f:
+    users = json.load(f)
+
+admin = users.get("admin", {})
 
 # ================= SESSION =================
 if "login" not in st.session_state:
     st.session_state.login = False
+if "role" not in st.session_state:
     st.session_state.role = "guest"
+if "reply_to" not in st.session_state:
+    st.session_state.reply_to = None
 
 # ================= THEME =================
 THEMES = {
     "rose": "#D98B8B",
     "rose_soft": "#E2A1A1"
 }
-THEME_COLOR = THEMES.get(admin.get("theme"), "#D98B8B")
+THEME_COLOR = THEMES.get(admin.get("theme", "rose"), "#D98B8B")
 
 # ================= STYLE =================
 st.markdown(f"""
@@ -63,6 +69,8 @@ body {{ background:#FFF6F6; }}
 .name {{ font-size:13px; opacity:0.9; margin-bottom:6px; }}
 .time {{ font-size:11px; opacity:0.7; margin-top:6px; display:block; text-align:right; }}
 .chat-img {{ margin-top:8px; border-radius:12px; max-width:200px; }}
+.reply-quote {{ font-size:12px; opacity:.75; margin-bottom:6px; border-left:3px solid #fff; padding-left:8px; }}
+.replying {{ font-size:13px; opacity:.8; margin-bottom:6px; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -70,11 +78,11 @@ body {{ background:#FFF6F6; }}
 st.sidebar.title("관리자")
 
 if not st.session_state.login:
-    with st.sidebar.form("login"):
+    with st.sidebar.form("login_form"):
         uid = st.text_input("아이디")
         pw = st.text_input("비밀번호", type="password")
         if st.form_submit_button("로그인"):
-            if uid == admin["id"] and pw == admin["password"]:
+            if uid == admin.get("id") and pw == admin.get("password"):
                 st.session_state.login = True
                 st.session_state.role = "admin"
                 st.rerun()
@@ -82,13 +90,14 @@ else:
     if st.sidebar.button("로그아웃"):
         st.session_state.login = False
         st.session_state.role = "guest"
+        st.session_state.reply_to = None
         st.rerun()
 
 # ================= ADMIN SETTINGS =================
 if st.session_state.role == "admin":
     st.sidebar.subheader("프로필 설정")
-    admin["name"] = st.sidebar.text_input("이름", admin["name"])
-    admin["theme"] = st.sidebar.selectbox("테마", THEMES.keys(), index=list(THEMES).index(admin["theme"]))
+    admin["name"] = st.sidebar.text_input("이름", admin.get("name", ""))
+    admin["theme"] = st.sidebar.selectbox("테마", list(THEMES.keys()), index=list(THEMES.keys()).index(admin.get("theme", "rose")))
     avatar = st.sidebar.file_uploader("프사 변경", type=["png","jpg"])
 
     if st.sidebar.button("저장"):
@@ -98,46 +107,41 @@ if st.session_state.role == "admin":
                 f.write(avatar.read())
             admin["avatar"] = path
         users["admin"] = admin
-        json.dump(users, open(USER_FILE,"w",encoding="utf-8"), ensure_ascii=False)
+        with open(USER_FILE, "w", encoding="utf-8") as f:
+            json.dump(users, f, ensure_ascii=False)
         st.rerun()
 
 # ================= CHAT VIEW =================
 st.markdown("<div class='chat'>", unsafe_allow_html=True)
 st.markdown("<div class='date'>2025.12.18</div>", unsafe_allow_html=True)
 
-# 답장 대상 선택 상태
-if "reply_to" not in st.session_state:
-    st.session_state.reply_to = None
-
 for m in messages:
-    side = "right" if m["role"] == "guest" else "left"
+    side = "right" if m.get("role") == "guest" else "left"
     st.markdown(f"<div class='msg {side}'>", unsafe_allow_html=True)
 
-    if m["role"] == "admin" and admin.get("avatar"):
+    if m.get("role") == "admin" and admin.get("avatar"):
         st.markdown(f"<img class='avatar' src='{admin['avatar']}'>", unsafe_allow_html=True)
 
     st.markdown("<div class='bubble'>", unsafe_allow_html=True)
 
-    # 답장 인용 표시
     if m.get("reply_to"):
-        ref = next((x for x in messages if x["id"] == m["reply_to"]), None)
+        ref = next((x for x in messages if x.get("id") == m.get("reply_to")), None)
         if ref:
-            st.markdown(f"<div style='font-size:12px;opacity:.7;margin-bottom:6px;border-left:3px solid #fff;padding-left:8px'>↪ {ref['text']}</div>", unsafe_allow_html=True)
+            st.markdown(f"<div class='reply-quote'>↪ {ref.get('text','')}</div>", unsafe_allow_html=True)
 
-    if m["role"] == "admin":
-        st.markdown(f"<div class='name'>{admin['name']} 🎀 ✔</div>", unsafe_allow_html=True)
+    if m.get("role") == "admin":
+        st.markdown(f"<div class='name'>{admin.get('name','')} 🎀 ✔</div>", unsafe_allow_html=True)
 
-    st.markdown(m["text"], unsafe_allow_html=True)
+    st.markdown(m.get("text",""), unsafe_allow_html=True)
 
     if m.get("image"):
         st.markdown(f"<img class='chat-img' src='{m['image']}'>", unsafe_allow_html=True)
 
-    st.markdown(f"<span class='time'>{m['time']}</span>", unsafe_allow_html=True)
+    st.markdown(f"<span class='time'>{m.get('time','')}</span>", unsafe_allow_html=True)
 
-    # 관리자만 답장 버튼
-    if st.session_state.role == "admin" and m["role"] == "guest":
+    if st.session_state.role == "admin" and m.get("role") == "guest":
         if st.button("답장", key=f"reply_{m['id']}"):
-            st.session_state.reply_to = m["id"]
+            st.session_state.reply_to = m['id']
 
     st.markdown("</div></div>", unsafe_allow_html=True)
 
@@ -145,7 +149,16 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 # ================= INPUT =================
 st.divider()
-with st.form("send", clear_on_submit=True):
+
+if st.session_state.reply_to:
+    ref = next((x for x in messages if x.get("id") == st.session_state.reply_to), None)
+    if ref:
+        st.markdown(f"<div class='replying'>↪ 답장 중: {ref.get('text','')}</div>", unsafe_allow_html=True)
+        if st.button("답장 취소"):
+            st.session_state.reply_to = None
+            st.rerun()
+
+with st.form("send_form", clear_on_submit=True):
     text = st.text_input("메시지")
     img = st.file_uploader("사진", type=["png","jpg"], label_visibility="collapsed")
     if st.form_submit_button("보내기") and text:
@@ -159,8 +172,12 @@ with st.form("send", clear_on_submit=True):
             "role": st.session_state.role,
             "text": text,
             "image": path,
+            "reply_to": st.session_state.reply_to,
             "time": datetime.now().strftime("%H:%M")
         })
-        json.dump(messages, open(MSG_FILE,"w",encoding="utf-8"), ensure_ascii=False)
+        with open(MSG_FILE, "w", encoding="utf-8") as f:
+            json.dump(messages, f, ensure_ascii=False)
+        st.session_state.reply_to = None
         st.rerun()
+
 
