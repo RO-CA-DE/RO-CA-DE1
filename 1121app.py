@@ -105,6 +105,10 @@ if st.session_state.role == "admin":
 st.markdown("<div class='chat'>", unsafe_allow_html=True)
 st.markdown("<div class='date'>2025.12.18</div>", unsafe_allow_html=True)
 
+# 답장 대상 선택 상태
+if "reply_to" not in st.session_state:
+    st.session_state.reply_to = None
+
 for m in messages:
     side = "right" if m["role"] == "guest" else "left"
     st.markdown(f"<div class='msg {side}'>", unsafe_allow_html=True)
@@ -113,12 +117,28 @@ for m in messages:
         st.markdown(f"<img class='avatar' src='{admin['avatar']}'>", unsafe_allow_html=True)
 
     st.markdown("<div class='bubble'>", unsafe_allow_html=True)
+
+    # 답장 인용 표시
+    if m.get("reply_to"):
+        ref = next((x for x in messages if x["id"] == m["reply_to"]), None)
+        if ref:
+            st.markdown(f"<div style='font-size:12px;opacity:.7;margin-bottom:6px;border-left:3px solid #fff;padding-left:8px'>↪ {ref['text']}</div>", unsafe_allow_html=True)
+
     if m["role"] == "admin":
         st.markdown(f"<div class='name'>{admin['name']} 🎀 ✔</div>", unsafe_allow_html=True)
+
     st.markdown(m["text"], unsafe_allow_html=True)
+
     if m.get("image"):
         st.markdown(f"<img class='chat-img' src='{m['image']}'>", unsafe_allow_html=True)
+
     st.markdown(f"<span class='time'>{m['time']}</span>", unsafe_allow_html=True)
+
+    # 관리자만 답장 버튼
+    if st.session_state.role == "admin" and m["role"] == "guest":
+        if st.button("답장", key=f"reply_{m['id']}"):
+            st.session_state.reply_to = m["id"]
+
     st.markdown("</div></div>", unsafe_allow_html=True)
 
 st.markdown("</div>", unsafe_allow_html=True)
@@ -143,3 +163,4 @@ with st.form("send", clear_on_submit=True):
         })
         json.dump(messages, open(MSG_FILE,"w",encoding="utf-8"), ensure_ascii=False)
         st.rerun()
+
