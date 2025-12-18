@@ -4,7 +4,7 @@ from datetime import datetime
 from uuid import uuid4
 
 # ================= BASIC =================
-st.set_page_config(page_title="Chat", layout="centered")
+st.set_page_config(page_title="AOUSE CHAT", layout="centered")
 
 DATA = "data"
 MSG_FILE = f"{DATA}/messages.json"
@@ -23,6 +23,7 @@ if not os.path.exists(USER_FILE):
     with open(USER_FILE, "w", encoding="utf-8") as f:
         json.dump({
             "admin": {
+                "id": "admin",
                 "password": "1234",
                 "name": "아진이",
                 "avatar": None,
@@ -33,60 +34,64 @@ if not os.path.exists(USER_FILE):
 # ================= LOAD =================
 messages = json.load(open(MSG_FILE, encoding="utf-8"))
 users = json.load(open(USER_FILE, encoding="utf-8"))
+admin = users["admin"]
 
 # ================= SESSION =================
 if "login" not in st.session_state:
     st.session_state.login = False
-    st.session_state.user = "guest"
+    st.session_state.role = "guest"
 
-# ================= THEMES =================
+# ================= THEME =================
 THEMES = {
     "rose": "#D98B8B",
-    "soft": "#E6A6A6"
+    "rose_soft": "#E2A1A1"
 }
-
-admin = users.get("admin")
 THEME_COLOR = THEMES.get(admin.get("theme"), "#D98B8B")
 
 # ================= STYLE =================
 st.markdown(f"""
 <style>
 body {{ background:#FFF6F6; }}
-.chat {{ max-width:420px; margin:auto; }}
-.date {{ margin:20px auto; padding:6px 16px; background:#EFEAEA; border-radius:999px; width:fit-content; font-size:14px; }}
-.msg {{ display:flex; margin-bottom:16px; }}
+* {{ font-family:'Pretendard',sans-serif; }}
+.chat {{ max-width:420px; margin:auto; padding:24px 14px; }}
+.date {{ margin:20px auto; padding:8px 18px; background:#EFEAEA; border-radius:999px; width:fit-content; font-size:14px; box-shadow:0 2px 6px rgba(0,0,0,0.08); }}
+.msg {{ display:flex; gap:8px; margin-bottom:18px; }}
 .left {{ justify-content:flex-start; }}
 .right {{ justify-content:flex-end; }}
-.avatar {{ width:40px; height:40px; border-radius:50%; margin-right:8px; object-fit:cover; }}
-.bubble {{ background:{THEME_COLOR}; color:white; padding:14px 18px; border-radius:18px; max-width:260px; box-shadow:0 6px 12px rgba(0,0,0,0.15); }}
+.avatar {{ width:42px; height:42px; border-radius:50%; object-fit:cover; box-shadow:0 2px 6px rgba(0,0,0,0.15); }}
+.bubble {{ background:{THEME_COLOR}; color:#FFFDFD; padding:14px 18px; border-radius:18px; max-width:260px; box-shadow:0 6px 12px rgba(217,139,139,0.35); line-height:1.4; }}
 .name {{ font-size:13px; opacity:0.9; margin-bottom:6px; }}
-.time {{ font-size:11px; opacity:0.7; margin-top:6px; display:block; }}
-img.chat-img {{ margin-top:8px; border-radius:12px; max-width:200px; }}
+.time {{ font-size:11px; opacity:0.7; margin-top:6px; display:block; text-align:right; }}
+.chat-img {{ margin-top:8px; border-radius:12px; max-width:200px; }}
 </style>
 """, unsafe_allow_html=True)
 
-# ================= LOGIN =================
-st.sidebar.title("설정")
+# ================= SIDEBAR =================
+st.sidebar.title("관리자")
 
 if not st.session_state.login:
-    if st.sidebar.button("관리자 로그인"):
-        st.session_state.login = True
-        st.session_state.user = "admin"
+    with st.sidebar.form("login"):
+        uid = st.text_input("아이디")
+        pw = st.text_input("비밀번호", type="password")
+        if st.form_submit_button("로그인"):
+            if uid == admin["id"] and pw == admin["password"]:
+                st.session_state.login = True
+                st.session_state.role = "admin"
+                st.rerun()
 else:
     if st.sidebar.button("로그아웃"):
         st.session_state.login = False
-        st.session_state.user = "guest"
+        st.session_state.role = "guest"
+        st.rerun()
 
 # ================= ADMIN SETTINGS =================
-if st.session_state.login:
+if st.session_state.role == "admin":
     st.sidebar.subheader("프로필 설정")
-    new_name = st.sidebar.text_input("이름", admin["name"])
-    theme = st.sidebar.selectbox("테마", THEMES.keys())
+    admin["name"] = st.sidebar.text_input("이름", admin["name"])
+    admin["theme"] = st.sidebar.selectbox("테마", THEMES.keys(), index=list(THEMES).index(admin["theme"]))
     avatar = st.sidebar.file_uploader("프사 변경", type=["png","jpg"])
 
     if st.sidebar.button("저장"):
-        admin["name"] = new_name
-        admin["theme"] = theme
         if avatar:
             path = f"{UPLOADS}/{uuid4()}.png"
             with open(path, "wb") as f:
@@ -94,7 +99,7 @@ if st.session_state.login:
             admin["avatar"] = path
         users["admin"] = admin
         json.dump(users, open(USER_FILE,"w",encoding="utf-8"), ensure_ascii=False)
-        st.experimental_rerun()
+        st.rerun()
 
 # ================= CHAT VIEW =================
 st.markdown("<div class='chat'>", unsafe_allow_html=True)
@@ -109,12 +114,10 @@ for m in messages:
 
     st.markdown("<div class='bubble'>", unsafe_allow_html=True)
     if m["role"] == "admin":
-        st.markdown(f"<div class='name'>{admin['name']} 🎀</div>", unsafe_allow_html=True)
+        st.markdown(f"<div class='name'>{admin['name']} 🎀 ✔</div>", unsafe_allow_html=True)
     st.markdown(m["text"], unsafe_allow_html=True)
-
     if m.get("image"):
         st.markdown(f"<img class='chat-img' src='{m['image']}'>", unsafe_allow_html=True)
-
     st.markdown(f"<span class='time'>{m['time']}</span>", unsafe_allow_html=True)
     st.markdown("</div></div>", unsafe_allow_html=True)
 
@@ -122,22 +125,21 @@ st.markdown("</div>", unsafe_allow_html=True)
 
 # ================= INPUT =================
 st.divider()
-text = st.text_input("메시지")
-img = st.file_uploader("사진", type=["png","jpg"], label_visibility="collapsed")
-
-if st.button("보내기") and text:
-    path = None
-    if img:
-        path = f"{UPLOADS}/{uuid4()}.png"
-        with open(path, "wb") as f:
-            f.write(img.read())
-
-    messages.append({
-        "id": str(uuid4()),
-        "role": st.session_state.user,
-        "text": text,
-        "image": path,
-        "time": datetime.now().strftime("%H:%M")
-    })
-    json.dump(messages, open(MSG_FILE,"w",encoding="utf-8"), ensure_ascii=False)
-    st.experimental_rerun()
+with st.form("send", clear_on_submit=True):
+    text = st.text_input("메시지")
+    img = st.file_uploader("사진", type=["png","jpg"], label_visibility="collapsed")
+    if st.form_submit_button("보내기") and text:
+        path = None
+        if img:
+            path = f"{UPLOADS}/{uuid4()}.png"
+            with open(path, "wb") as f:
+                f.write(img.read())
+        messages.append({
+            "id": str(uuid4()),
+            "role": st.session_state.role,
+            "text": text,
+            "image": path,
+            "time": datetime.now().strftime("%H:%M")
+        })
+        json.dump(messages, open(MSG_FILE,"w",encoding="utf-8"), ensure_ascii=False)
+        st.rerun()
