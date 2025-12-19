@@ -57,20 +57,117 @@ THEME_COLOR = THEMES.get(admin.get("theme", "rose"), "#D98B8B")
 # ================= STYLE =================
 st.markdown(f"""
 <style>
-body {{ background:#FFF6F6; }}
-* {{ font-family:'Pretendard',sans-serif; }}
-.chat {{ max-width:420px; margin:auto; padding:24px 14px; }}
-.date {{ margin:20px auto; padding:8px 18px; background:#EFEAEA; border-radius:999px; width:fit-content; font-size:14px; box-shadow:0 2px 6px rgba(0,0,0,0.08); }}
-.msg {{ display:flex; gap:8px; margin-bottom:18px; }}
-.left {{ justify-content:flex-start; }}
-.right {{ justify-content:flex-end; }}
-.avatar {{ width:42px; height:42px; border-radius:50%; object-fit:cover; box-shadow:0 2px 6px rgba(0,0,0,0.15); }}
-.bubble {{ background:{THEME_COLOR}; color:#FFFDFD; padding:14px 18px; border-radius:18px; max-width:260px; box-shadow:0 6px 12px rgba(217,139,139,0.35); line-height:1.4; }}
-.name {{ font-size:13px; opacity:0.9; margin-bottom:6px; }}
-.time {{ font-size:11px; opacity:0.7; margin-top:6px; display:block; text-align:right; }}
-.chat-img {{ margin-top:8px; border-radius:12px; max-width:200px; }}
-.reply-quote {{ font-size:12px; opacity:.75; margin-bottom:6px; border-left:3px solid #fff; padding-left:8px; }}
-.replying {{ font-size:13px; opacity:.8; margin-bottom:6px; }}
+body { background:#FFF6F6; }
+* { font-family:'Pretendard',sans-serif; box-sizing:border-box; }
+
+/* ===== MOBILE FIRST ===== */
+.chat {
+  max-width: 420px;
+  margin: 0 auto;
+  padding: 20px 12px 120px;
+}
+
+/* PC에서는 모바일 화면처럼 */
+@media (min-width: 768px) {
+  .chat {
+    max-width: 390px;
+  }
+}
+
+.date {
+  margin: 18px auto;
+  padding: 8px 18px;
+  background:#EFEAEA;
+  border-radius:999px;
+  width:fit-content;
+  font-size:13px;
+  color:#555;
+  box-shadow:0 2px 6px rgba(0,0,0,0.08);
+}
+
+.msg { display:flex; gap:8px; margin-bottom:16px; }
+.left { justify-content:flex-start; }
+.right { justify-content:flex-end; }
+
+.avatar {
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  object-fit:cover;
+  box-shadow:0 2px 6px rgba(0,0,0,0.15);
+}
+
+.bubble {
+  background:#D98B8B;
+  color:#FFFDFD;
+  padding:14px 18px;
+  border-radius:18px;
+  max-width:72%;
+  box-shadow:0 6px 12px rgba(217,139,139,0.35);
+  line-height:1.5;
+  letter-spacing:-0.2px;
+}
+
+.left .bubble {
+  box-shadow:0 6px 14px rgba(217,139,139,0.45);
+}
+
+.right .bubble {
+  box-shadow:0 4px 10px rgba(217,139,139,0.25);
+}
+
+.name {
+  font-size:12px;
+  font-weight:500;
+  opacity:0.85;
+  margin-bottom:4px;
+}
+
+.text {
+  font-size:14.5px;
+  font-weight:400;
+}
+
+.time {
+  font-size:11px;
+  opacity:0.65;
+  margin-top:6px;
+  display:block;
+  text-align:right;
+}
+
+.chat-img {
+  margin-top:8px;
+  border-radius:12px;
+  max-width:200px;
+}
+
+.reply-quote {
+  font-size:12px;
+  opacity:0.6;
+  margin-bottom:8px;
+  border-left:2px solid rgba(255,255,255,0.6);
+  padding-left:8px;
+}
+
+.replying {
+  font-size:13px;
+  opacity:0.75;
+  margin-bottom:8px;
+}
+
+/* 입력창 모바일 고정 느낌 */
+section[data-testid="stForm"] {
+  position:fixed;
+  bottom:0;
+  left:50%;
+  transform:translateX(-50%);
+  width:100%;
+  max-width:420px;
+  background:#FFF6F6;
+  padding:10px 12px 14px;
+  border-top:1px solid rgba(0,0,0,0.05);
+}
 </style>
 """, unsafe_allow_html=True)
 
@@ -179,5 +276,3 @@ with st.form("send_form", clear_on_submit=True):
             json.dump(messages, f, ensure_ascii=False)
         st.session_state.reply_to = None
         st.rerun()
-
-
