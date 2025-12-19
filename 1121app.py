@@ -3,7 +3,7 @@ import os, json
 from datetime import datetime
 from PIL import Image
 
-# ================= 기본 설정 =================
+# ================= 설정 =================
 st.set_page_config(page_title="Chat", layout="centered")
 
 DATA = "data"
@@ -22,21 +22,22 @@ def load_admin():
             "name": "관리자",
             "avatar": None
         }
-        json.dump(admin, open(ADMIN_FILE,"w",encoding="utf-8"), ensure_ascii=False, indent=2)
-    return json.load(open(ADMIN_FILE,"r",encoding="utf-8"))
+        json.dump(admin, open(ADMIN_FILE, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+    return json.load(open(ADMIN_FILE, "r", encoding="utf-8"))
 
 def save_admin(a):
-    json.dump(a, open(ADMIN_FILE,"w",encoding="utf-8"), ensure_ascii=False, indent=2)
+    json.dump(a, open(ADMIN_FILE, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
 admin = load_admin()
 
 # ================= 메시지 =================
 def load_msgs():
-    if not os.path.exists(MSG_FILE): return []
-    return json.load(open(MSG_FILE,"r",encoding="utf-8"))
+    if not os.path.exists(MSG_FILE):
+        return []
+    return json.load(open(MSG_FILE, "r", encoding="utf-8"))
 
 def save_msgs(m):
-    json.dump(m, open(MSG_FILE,"w",encoding="utf-8"), ensure_ascii=False, indent=2)
+    json.dump(m, open(MSG_FILE, "w", encoding="utf-8"), ensure_ascii=False, indent=2)
 
 # ================= 세션 =================
 if "login" not in st.session_state:
@@ -48,7 +49,11 @@ if "reply" not in st.session_state:
 st.markdown("""
 <style>
 body { background:#FFEFF4; }
-.chat { max-width:390px; margin:auto; padding:20px 12px 150px; }
+.chat {
+  max-width:390px;
+  margin:auto;
+  padding:20px 12px 160px;
+}
 
 .msg { display:flex; margin-bottom:18px; }
 .left { justify-content:flex-start; }
@@ -69,12 +74,12 @@ body { background:#FFEFF4; }
   line-height:1.5;
 }
 
-.q { background:white; color:#333; }
-.a { background:#F6A5C0; color:white; }
+.q { background:#FFFFFF; color:#333; }
+.a { background:#F6A5C0; color:#FFFFFF; }
 
 .reply {
   font-size:12px;
-  opacity:.7;
+  opacity:.75;
   margin-bottom:6px;
   border-left:3px solid rgba(255,255,255,.7);
   padding-left:8px;
@@ -87,7 +92,7 @@ body { background:#FFEFF4; }
   text-align:right;
 }
 
-img.chat-img {
+.chat-img {
   max-width:100%;
   border-radius:12px;
   margin-top:6px;
@@ -121,7 +126,7 @@ with st.sidebar:
         st.success("관리자 로그인")
         admin["name"] = st.text_input("이름", admin["name"])
 
-        avatar = st.file_uploader("프사 업로드", type=["png","jpg","jpeg"])
+        avatar = st.file_uploader("프사 업로드", type=["png", "jpg", "jpeg"])
         if avatar:
             img = Image.open(avatar)
             path = f"{AVATAR_DIR}/avatar.png"
@@ -139,18 +144,22 @@ with st.sidebar:
 msgs = load_msgs()
 st.markdown("<div class='chat'>", unsafe_allow_html=True)
 
-for i,m in enumerate(msgs):
-    t = m["type"]
-    side = "right" if t=="question" else "left"
+for i, m in enumerate(msgs):
+    # 🔒 핵심: 절대 KeyError 안 나게
+    t = m.get("type", "question")
+
+    # 🔒 질문은 무조건 오른쪽 / 답변은 무조건 왼쪽
+    side = "right" if t == "question" else "left"
+    bubble = "q" if t == "question" else "a"
 
     st.markdown(f"<div class='msg {side}'>", unsafe_allow_html=True)
 
-    if side=="left" and admin["avatar"]:
+    if side == "left" and admin.get("avatar"):
         st.markdown(f"<img src='{admin['avatar']}' class='avatar'>", unsafe_allow_html=True)
 
-    bubble_class = "q" if t=="question" else "a"
-    st.markdown(f"<div class='bubble {bubble_class}'>", unsafe_allow_html=True)
+    st.markdown(f"<div class='bubble {bubble}'>", unsafe_allow_html=True)
 
+    # ✅ 답장 질문은 말풍선 안에만
     if m.get("reply"):
         st.markdown(f"<div class='reply'>↪ {m['reply']}</div>", unsafe_allow_html=True)
 
@@ -160,10 +169,10 @@ for i,m in enumerate(msgs):
     if m.get("image"):
         st.markdown(f"<img src='{m['image']}' class='chat-img'>", unsafe_allow_html=True)
 
-    st.markdown(f"<div class='time'>{m['time']}</div>", unsafe_allow_html=True)
+    st.markdown(f"<div class='time'>{m.get('time','')}</div>", unsafe_allow_html=True)
     st.markdown("</div></div>", unsafe_allow_html=True)
 
-    if t=="question" and st.session_state.login:
+    if t == "question" and st.session_state.login:
         if st.button("답장", key=f"r{i}"):
             st.session_state.reply = m.get("text")
             st.rerun()
@@ -176,7 +185,7 @@ with st.form("send", clear_on_submit=True):
         st.markdown(f"↪ 답장 중: {st.session_state.reply}")
 
     txt = st.text_input("메시지")
-    img = st.file_uploader("사진", type=["png","jpg","jpeg"])
+    img = st.file_uploader("사진", type=["png", "jpg", "jpeg"])
     send = st.form_submit_button("보내기")
 
 if send and (txt or img):
