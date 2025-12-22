@@ -23,15 +23,32 @@ def save(p,d):
 users = load(USERS)
 chats = load(CHATS)
 
-# ================= THEME =================
+# ================= THEME (확장 가능) =================
 THEMES={
- "pink":{"bg":"#ffe6f0","me":"#ff5fa2"},
- "blue":{"bg":"#eaf4ff","me":"#6fa8ff"},
- "dark":{"bg":"#111","me":"#333"}
+ "Pink":{
+    "bg":"#ffe6f0","card":"#ffffff","me":"#ff5fa2",
+    "btn":"#ff8fc7","text":"#222"
+ },
+ "Blue":{
+    "bg":"#eaf4ff","card":"#ffffff","me":"#6fa8ff",
+    "btn":"#8fbaff","text":"#222"
+ },
+ "Dark":{
+    "bg":"#0f0f14","card":"#1c1c24","me":"#3b82f6",
+    "btn":"#2d2d3a","text":"#f5f5f5"
+ },
+ "Cream":{
+    "bg":"#fff7ec","card":"#ffffff","me":"#f4a261",
+    "btn":"#ffd6a5","text":"#222"
+ },
+ "Mint":{
+    "bg":"#ecfff8","card":"#ffffff","me":"#2dd4bf",
+    "btn":"#99f6e4","text":"#222"
+ }
 }
 
 # ================= SESSION =================
-for k in ["uid","chat","typing"]:
+for k in ["uid","chat"]:
     if k not in st.session_state:
         st.session_state[k]=None
 
@@ -39,14 +56,10 @@ for k in ["uid","chat","typing"]:
 if not st.session_state.uid:
     st.markdown("## 💬 AOUSE CHAT")
     name=st.text_input("이름")
-    theme=st.selectbox("테마", THEMES)
+    theme=st.selectbox("테마 선택", THEMES.keys())
     if st.button("시작"):
         uid=str(uuid.uuid4())
-        users[uid]={
-            "name":name,
-            "theme":theme,
-            "last":0
-        }
+        users[uid]={"name":name,"theme":theme}
         save(USERS,users)
         st.session_state.uid=uid
         st.rerun()
@@ -58,24 +71,40 @@ theme=THEMES[me["theme"]]
 # ================= STYLE =================
 st.markdown(f"""
 <style>
-body {{ background:{theme['bg']}; }}
+body {{
+ background:{theme['bg']};
+ color:{theme['text']};
+}}
 .app {{ max-width:420px;margin:auto; }}
 .card {{
- background:white;
- border-radius:20px;
- padding:14px;
- margin:8px 0;
+ background:{theme['card']};
+ border-radius:22px;
+ padding:16px;
+ margin:10px 0;
+ box-shadow:0 10px 30px rgba(0,0,0,.08);
 }}
 .msg {{
- padding:12px;
- border-radius:18px;
+ padding:14px;
+ border-radius:22px;
  max-width:80%;
  margin:6px 0;
+ word-break:break-word;
 }}
-.me {{ background:{theme['me']};color:white;margin-left:auto; }}
-.other {{ background:white; }}
+.me {{
+ background:{theme['me']};
+ color:white;
+ margin-left:auto;
+}}
+.other {{
+ background:{theme['card']};
+}}
+.btn {{
+ background:{theme['btn']};
+ color:white;
+ border-radius:14px;
+ padding:8px 12px;
+}}
 .small {{ font-size:11px;opacity:.6; }}
-.pin {{ color:#ff5fa2;font-weight:bold; }}
 </style>
 """, unsafe_allow_html=True)
 
@@ -84,7 +113,8 @@ with st.sidebar:
     st.subheader("👤 프로필")
     me["name"]=st.text_input("이름",me["name"])
     me["theme"]=st.selectbox(
-        "테마",THEMES,
+        "테마",
+        THEMES.keys(),
         index=list(THEMES).index(me["theme"])
     )
     users[st.session_state.uid]=me
@@ -92,9 +122,9 @@ with st.sidebar:
 
 # ================= CHAT LIST =================
 if not st.session_state.chat:
-    st.markdown("## 💬 채팅 목록")
+    st.markdown("## 💬 채팅")
 
-    if st.button("➕ 새 채팅"):
+    if st.button("➕ 1:1 채팅"):
         cid=str(uuid.uuid4())
         chats[cid]={
             "name":"1:1 채팅",
@@ -105,7 +135,7 @@ if not st.session_state.chat:
         }
         save(CHATS,chats)
 
-    if st.button("👥 그룹 채팅 생성"):
+    if st.button("👥 그룹 채팅"):
         cid=str(uuid.uuid4())
         chats[cid]={
             "name":"그룹 채팅",
@@ -137,21 +167,19 @@ if not st.session_state.chat:
 cid=st.session_state.chat
 chat=chats[cid]
 
-st.markdown(f"### {'👥 ' if chat['group'] else ''}{chat['name']}")
-
-cols=st.columns(3)
-if cols[0].button("📌"):
+cols=st.columns([5,1,1])
+cols[0].markdown(f"### {'👥 ' if chat['group'] else ''}{chat['name']}")
+if cols[1].button("📌"):
     chat["pin"]=not chat["pin"]
     save(CHATS,chats)
     st.rerun()
-
-if cols[1].button("← 목록"):
-    st.session_state.chat=None
-    st.rerun()
-
 if cols[2].button("🗑"):
     del chats[cid]
     save(CHATS,chats)
+    st.session_state.chat=None
+    st.rerun()
+
+if st.button("← 목록"):
     st.session_state.chat=None
     st.rerun()
 
@@ -162,10 +190,9 @@ for m in chat["msgs"]:
         m["read"].append(st.session_state.uid)
         save(CHATS,chats)
 
-    name=users[m["user"]]["name"]
     st.markdown(
         f"<div class='msg {cls}'>"
-        f"<b>{name}</b><br>"
+        f"<b>{users[m['user']]['name']}</b><br>"
         f"{'삭제된 메시지' if m['del'] else m['text']}"
         f"<br><span class='small'>"
         f"{'❤️ '+str(m['like']) if m['like']>0 else ''} "
@@ -175,19 +202,19 @@ for m in chat["msgs"]:
     )
 
     if not m["del"]:
-        cols=st.columns(2)
-        if cols[0].button("❤️", key=m["id"]+"l"):
+        c1,c2=st.columns(2)
+        if c1.button("❤️", key=m["id"]+"l"):
             m["like"]+=1
             save(CHATS,chats)
             st.rerun()
         if m["user"]==st.session_state.uid:
-            if cols[1].button("삭제", key=m["id"]+"d"):
+            if c2.button("삭제", key=m["id"]+"d"):
                 m["del"]=True
                 save(CHATS,chats)
                 st.rerun()
 
 # ================= INPUT =================
-msg=st.text_area("메시지")
+msg=st.text_area("메시지 입력")
 
 if msg:
     st.caption("입력중…")
@@ -204,3 +231,4 @@ if st.button("전송"):
     })
     save(CHATS,chats)
     st.rerun()
+
