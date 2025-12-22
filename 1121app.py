@@ -7,7 +7,6 @@ DATA="data"
 UPLOAD="uploads/profiles"
 USERS=f"{DATA}/users.json"
 CHATS=f"{DATA}/chats.json"
-THEMES=f"{DATA}/themes.json"
 
 os.makedirs(DATA, exist_ok=True)
 os.makedirs(UPLOAD, exist_ok=True)
@@ -18,22 +17,36 @@ def init(p,d):
 
 init(USERS,{})
 init(CHATS,{})
-init(THEMES,{
-    "Pink":{"bg":"#ffe6f0","card":"#ffffff","me":"#ff5fa2","text":"#222"},
-    "Dark":{"bg":"#111111","card":"#1c1c1c","me":"#3b82f6","text":"#f5f5f5"}
-})
 
 def load(p): return json.load(open(p))
 def save(p,d): json.dump(d,open(p,"w"),indent=2)
 
 users=load(USERS)
 chats=load(CHATS)
-themes=load(THEMES)
+
+THEMES={
+ "Pink":{"bg":"#ffe6f0","me":"#ff5fa2"},
+ "Blue":{"bg":"#eaf2ff","me":"#6fa8ff"},
+ "Mint":{"bg":"#ecfff8","me":"#2dd4bf"},
+ "Dark":{"bg":"#0f0f14","me":"#3b82f6"},
+ "Light":{"bg":"#f5f5f5","me":"#999"},
+ "Green":{"bg":"#ecfdf5","me":"#22c55e"},
+ "Yellow":{"bg":"#fffbe6","me":"#facc15"}
+}
 
 # ================= SESSION =================
-if "uid" not in st.session_state: st.session_state.uid=None
-if "page" not in st.session_state: st.session_state.page="list"
-if "chat" not in st.session_state: st.session_state.chat=None
+for k,v in {
+    "uid":None,
+    "tab":"friends",
+    "chat":None,
+    "typing":False
+}.items():
+    if k not in st.session_state:
+        st.session_state[k]=v
+
+# ================= AUTO REFRESH =================
+st.experimental_set_query_params(t=int(time.time()))
+time.sleep(1)
 
 # ================= LOGIN =================
 if not st.session_state.uid:
@@ -48,145 +61,98 @@ if not st.session_state.uid:
     st.stop()
 
 me=users[st.session_state.uid]
-theme=themes[me["theme"]]
+theme=THEMES[me["theme"]]
 
-# ================= STYLE =================
-st.markdown(f"""
-<style>
-body {{ background:{theme['bg']}; color:{theme['text']}; }}
-.app {{ max-width:420px;margin:auto; }}
-.card {{
- background:{theme['card']};
- border-radius:20px;
- padding:14px;
- margin:8px 0;
-}}
-.msg {{
- padding:12px;
- border-radius:18px;
- max-width:75%;
- margin:6px 0;
-}}
-.me {{ background:{theme['me']}; color:white; margin-left:auto; }}
-.other {{ background:#eee; }}
-.header {{
- display:flex; justify-content:space-between; align-items:center;
-}}
-.small {{ font-size:11px; opacity:.6; }}
-</style>
-""", unsafe_allow_html=True)
-
-# ================= SETTINGS PAGE =================
-if st.session_state.page=="settings":
-    st.markdown("## ⚙️ 프로필 설정")
-
-    if me["pf"]:
-        st.image(me["pf"], width=90)
-
-    pf=st.file_uploader("프로필 사진", type=["png","jpg"])
-    name=st.text_input("이름", me["name"])
-
-    if pf:
-        path=f"{UPLOAD}/{uuid.uuid4()}.png"
-        open(path,"wb").write(pf.read())
-        me["pf"]=path
-
-    me["name"]=name
-    users[st.session_state.uid]=me
-    save(USERS,users)
-
-    st.markdown("### 🎨 테마 선택")
-    me["theme"]=st.selectbox(
-        "기존 테마",
-        list(themes.keys()),
-        index=list(themes.keys()).index(me["theme"])
-    )
-    save(USERS,users)
-
-    st.markdown("### ➕ 테마 추가 (항상 보임)")
-    tname=st.text_input("테마 이름")
-    bg=st.color_picker("배경")
-    card=st.color_picker("카드")
-    bubble=st.color_picker("내 말풍선")
-    txt=st.color_picker("텍스트")
-
-    if st.button("➕ 테마 추가 & 적용"):
-        if tname:
-            themes[tname]={
-                "bg":bg,"card":card,"me":bubble,"text":txt
-            }
-            save(THEMES,themes)
-            me["theme"]=tname
-            save(USERS,users)
-            st.success("테마 적용 완료")
-
-    if st.button("← 돌아가기"):
-        st.session_state.page="list"
-        st.rerun()
-
-    st.stop()
-
-# ================= HEADER =================
 st.markdown(
-    f"<div class='header'><h3>💬 채팅</h3></div>",
+    f"<style>body{{background:{theme['bg']};}}</style>",
     unsafe_allow_html=True
 )
 
-if st.button("⚙️ 설정"):
-    st.session_state.page="settings"
-    st.rerun()
+# ================= HEADER =================
+st.markdown("## 💬 AOUSE")
 
-# ================= CHAT LIST =================
-if st.session_state.page=="list":
-    if st.button("➕ 새 채팅"):
-        cid=str(uuid.uuid4())
-        chats[cid]={
-            "members":[st.session_state.uid],
-            "msgs":[]
-        }
-        save(CHATS,chats)
+# ================= CHAT VIEW =================
+if st.session_state.chat:
+    chat=chats[st.session_state.chat]
 
-    for cid,c in chats.items():
-        if st.session_state.uid in c["members"]:
-            if st.button("채팅방", key=cid):
-                st.session_state.chat=cid
-                st.session_state.page="chat"
+    others=[u for u in chat["members"] if u!=st.session_state.uid]
+    st.markdown(" ".join([f"👤 {users[o]['name']}" for o in others]))
+
+    for m in chat["msgs"]:
+        if st.session_state.uid not in m["read"]:
+            m["read"].append(st.session_state.uid)
+            save(CHATS,chats)
+
+        read="✔✔" if len(m["read"])>1 else "✔"
+        txt="삭제된 메시지" if m["deleted"] else m["text"]
+
+        st.markdown(
+            f"**{users[m['user']]['name']}**: {txt} ❤️{m['like']} {read}"
+        )
+
+        if m["user"]==st.session_state.uid and not m["deleted"]:
+            if st.button("🗑 삭제", key=m["id"]):
+                m["deleted"]=True
+                save(CHATS,chats)
                 st.rerun()
-    st.stop()
+            if st.button("❤️", key=m["id"]+"l"):
+                m["like"]+=1
+                save(CHATS,chats)
+                st.rerun()
 
-# ================= CHAT PAGE =================
-chat=chats[st.session_state.chat]
+    txt=st.text_input("메시지 입력", on_change=lambda: st.session_state.update({"typing":True}))
+    if st.button("전송"):
+        chat["msgs"].append({
+            "id":str(uuid.uuid4()),
+            "user":st.session_state.uid,
+            "text":txt,
+            "time":time.time(),
+            "read":[st.session_state.uid],
+            "like":0,
+            "deleted":False
+        })
+        st.session_state.typing=False
+        save(CHATS,chats)
+        st.rerun()
 
-# 상대 프로필 표시
-others=[u for u in chat["members"] if u!=st.session_state.uid]
-if others:
-    o=users[others[0]]
-    cols=st.columns([1,6])
-    with cols[0]:
-        if o["pf"]: st.image(o["pf"], width=40)
-    with cols[1]:
-        st.markdown(f"**{o['name']}**")
+    if st.button("← 뒤로"):
+        st.session_state.chat=None
+        st.rerun()
 
-if st.button("← 목록"):
-    st.session_state.page="list"
-    st.rerun()
+# ================= FRIENDS =================
+elif st.session_state.tab=="friends":
+    st.markdown("### 👥 친구")
+    for uid,u in users.items():
+        if uid==st.session_state.uid: continue
+        if st.button(u["name"], key=uid):
+            cid=str(uuid.uuid4())
+            chats[cid]={"members":[st.session_state.uid,uid],"msgs":[]}
+            save(CHATS,chats)
+            st.session_state.chat=cid
+            st.rerun()
 
-# 메시지
-for m in chat["msgs"]:
-    cls="me" if m["user"]==st.session_state.uid else "other"
-    st.markdown(
-        f"<div class='msg {cls}'>{users[m['user']]['name']}<br>{m['text']}</div>",
-        unsafe_allow_html=True
-    )
+# ================= SETTINGS =================
+elif st.session_state.tab=="settings":
+    st.markdown("### ⚙️ 설정")
+    me["name"]=st.text_input("이름", me["name"])
+    me["theme"]=st.selectbox("테마", THEMES.keys(),
+        index=list(THEMES).index(me["theme"]))
+    save(USERS,users)
 
-txt=st.text_area("메시지")
-if st.button("전송"):
-    chat["msgs"].append({
-        "user":st.session_state.uid,
-        "text":txt,
-        "time":time.time()
-    })
-    save(CHATS,chats)
-    st.rerun()
-
-
+# ================= BOTTOM TAB =================
+st.markdown("---")
+c1,c2,c3=st.columns(3)
+with c1:
+    if st.button("🏠"):
+        st.session_state.tab="friends"
+        st.session_state.chat=None
+        st.rerun()
+with c2:
+    if st.button("💬"):
+        st.session_state.tab="friends"
+        st.rerun()
+with c3:
+    if st.button("⚙️"):
+        st.session_state.tab="settings"
+        st.session_state.chat=None
+        st.rerun()
