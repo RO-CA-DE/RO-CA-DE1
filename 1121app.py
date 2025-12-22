@@ -1,30 +1,26 @@
 import streamlit as st
 import json, os, uuid, time
-from PIL import Image
 
-# ================= BASIC =================
 st.set_page_config(page_title="AOUSE CHAT", layout="centered")
 
 DATA="data"
-UPLOAD_IMG="uploads/images"
-UPLOAD_PF="uploads/profiles"
+UPLOAD="uploads/profiles"
 USERS=f"{DATA}/users.json"
 CHATS=f"{DATA}/chats.json"
 THEMES=f"{DATA}/themes.json"
 
 os.makedirs(DATA, exist_ok=True)
-os.makedirs(UPLOAD_IMG, exist_ok=True)
-os.makedirs(UPLOAD_PF, exist_ok=True)
+os.makedirs(UPLOAD, exist_ok=True)
 
-def init(path, default):
-    if not os.path.exists(path):
-        with open(path,"w") as f: json.dump(default,f,indent=2)
+def init(p,d):
+    if not os.path.exists(p):
+        json.dump(d, open(p,"w"), indent=2)
 
 init(USERS,{})
 init(CHATS,{})
 init(THEMES,{
     "Pink":{"bg":"#ffe6f0","card":"#ffffff","me":"#ff5fa2","text":"#222"},
-    "Dark":{"bg":"#0f0f14","card":"#1c1c24","me":"#3b82f6","text":"#f5f5f5"}
+    "Dark":{"bg":"#111111","card":"#1c1c1c","me":"#3b82f6","text":"#f5f5f5"}
 })
 
 def load(p): return json.load(open(p))
@@ -35,9 +31,9 @@ chats=load(CHATS)
 themes=load(THEMES)
 
 # ================= SESSION =================
-for k in ["uid","chat","page"]:
-    if k not in st.session_state:
-        st.session_state[k]=None
+if "uid" not in st.session_state: st.session_state.uid=None
+if "page" not in st.session_state: st.session_state.page="list"
+if "chat" not in st.session_state: st.session_state.chat=None
 
 # ================= LOGIN =================
 if not st.session_state.uid:
@@ -45,11 +41,7 @@ if not st.session_state.uid:
     name=st.text_input("이름")
     if st.button("시작"):
         uid=str(uuid.uuid4())
-        users[uid]={
-            "name":name,
-            "pf":"",
-            "theme":"Pink"
-        }
+        users[uid]={"name":name,"pf":"","theme":"Pink"}
         save(USERS,users)
         st.session_state.uid=uid
         st.rerun()
@@ -61,7 +53,7 @@ theme=themes[me["theme"]]
 # ================= STYLE =================
 st.markdown(f"""
 <style>
-body {{ background:{theme['bg']}; }}
+body {{ background:{theme['bg']}; color:{theme['text']}; }}
 .app {{ max-width:420px;margin:auto; }}
 .card {{
  background:{theme['card']};
@@ -72,27 +64,30 @@ body {{ background:{theme['bg']}; }}
 .msg {{
  padding:12px;
  border-radius:18px;
- max-width:80%;
+ max-width:75%;
  margin:6px 0;
 }}
 .me {{ background:{theme['me']}; color:white; margin-left:auto; }}
 .other {{ background:#eee; }}
+.header {{
+ display:flex; justify-content:space-between; align-items:center;
+}}
 .small {{ font-size:11px; opacity:.6; }}
 </style>
-""",unsafe_allow_html=True)
+""", unsafe_allow_html=True)
 
 # ================= SETTINGS PAGE =================
 if st.session_state.page=="settings":
     st.markdown("## ⚙️ 프로필 설정")
 
     if me["pf"]:
-        st.image(me["pf"], width=100)
+        st.image(me["pf"], width=90)
 
-    pf=st.file_uploader("프로필 사진", type=["png","jpg","jpeg"])
+    pf=st.file_uploader("프로필 사진", type=["png","jpg"])
     name=st.text_input("이름", me["name"])
 
     if pf:
-        path=f"{UPLOAD_PF}/{uuid.uuid4()}.png"
+        path=f"{UPLOAD}/{uuid.uuid4()}.png"
         open(path,"wb").write(pf.read())
         me["pf"]=path
 
@@ -101,56 +96,69 @@ if st.session_state.page=="settings":
     save(USERS,users)
 
     st.markdown("### 🎨 테마 선택")
-    me["theme"]=st.selectbox("테마", themes.keys(), index=list(themes).index(me["theme"]))
+    me["theme"]=st.selectbox(
+        "기존 테마",
+        list(themes.keys()),
+        index=list(themes.keys()).index(me["theme"])
+    )
     save(USERS,users)
 
-    st.markdown("### ➕ 테마 추가")
+    st.markdown("### ➕ 테마 추가 (항상 보임)")
     tname=st.text_input("테마 이름")
     bg=st.color_picker("배경")
     card=st.color_picker("카드")
-    meb=st.color_picker("내 말풍선")
+    bubble=st.color_picker("내 말풍선")
     txt=st.color_picker("텍스트")
 
-    if st.button("테마 추가"):
-        themes[tname]={"bg":bg,"card":card,"me":meb,"text":txt}
-        save(THEMES,themes)
-        me["theme"]=tname
-        save(USERS,users)
-        st.success("추가 완료")
+    if st.button("➕ 테마 추가 & 적용"):
+        if tname:
+            themes[tname]={
+                "bg":bg,"card":card,"me":bubble,"text":txt
+            }
+            save(THEMES,themes)
+            me["theme"]=tname
+            save(USERS,users)
+            st.success("테마 적용 완료")
 
     if st.button("← 돌아가기"):
-        st.session_state.page=None
+        st.session_state.page="list"
         st.rerun()
 
     st.stop()
 
 # ================= HEADER =================
-c1,c2=st.columns([8,1])
-with c1:
-    st.markdown("## 💬 채팅")
-with c2:
-    if st.button("⚙️"):
-        st.session_state.page="settings"
-        st.rerun()
+st.markdown(
+    f"<div class='header'><h3>💬 채팅</h3></div>",
+    unsafe_allow_html=True
+)
+
+if st.button("⚙️ 설정"):
+    st.session_state.page="settings"
+    st.rerun()
 
 # ================= CHAT LIST =================
-if not st.session_state.chat:
-    if st.button("➕ 1:1 채팅"):
+if st.session_state.page=="list":
+    if st.button("➕ 새 채팅"):
         cid=str(uuid.uuid4())
-        chats[cid]={"name":"1:1 채팅","members":[st.session_state.uid],"msgs":[],"pin":False}
+        chats[cid]={
+            "members":[st.session_state.uid],
+            "msgs":[]
+        }
         save(CHATS,chats)
 
     for cid,c in chats.items():
         if st.session_state.uid in c["members"]:
-            if st.button(("📌 " if c["pin"] else "")+c["name"], key=cid):
+            if st.button("채팅방", key=cid):
                 st.session_state.chat=cid
+                st.session_state.page="chat"
                 st.rerun()
     st.stop()
 
-# ================= CHAT ROOM =================
+# ================= CHAT PAGE =================
 chat=chats[st.session_state.chat]
-others=[u for u in chat["members"] if u!=st.session_state.uid]
 
+# 상대 프로필 표시
+others=[u for u in chat["members"] if u!=st.session_state.uid]
 if others:
     o=users[others[0]]
     cols=st.columns([1,6])
@@ -160,39 +168,25 @@ if others:
         st.markdown(f"**{o['name']}**")
 
 if st.button("← 목록"):
-    st.session_state.chat=None
+    st.session_state.page="list"
     st.rerun()
 
-# ================= MESSAGES =================
+# 메시지
 for m in chat["msgs"]:
     cls="me" if m["user"]==st.session_state.uid else "other"
     st.markdown(
-        f"<div class='msg {cls}'>"
-        f"<b>{users[m['user']]['name']}</b><br>"
-        f"{m['text']}<br>"
-        f"<span class='small'>❤️ {m['like']} {'✔✔' if len(m['read'])>1 else '✔'}</span>"
-        f"</div>",unsafe_allow_html=True
+        f"<div class='msg {cls}'>{users[m['user']]['name']}<br>{m['text']}</div>",
+        unsafe_allow_html=True
     )
 
-# ================= INPUT =================
 txt=st.text_area("메시지")
-img=st.file_uploader("이미지", type=["png","jpg","jpeg"])
-
 if st.button("전송"):
-    imgp=""
-    if img:
-        imgp=f"{UPLOAD_IMG}/{uuid.uuid4()}.png"
-        open(imgp,"wb").write(img.read())
-
     chat["msgs"].append({
-        "id":str(uuid.uuid4()),
         "user":st.session_state.uid,
         "text":txt,
-        "img":imgp,
-        "time":time.time(),
-        "read":[st.session_state.uid],
-        "like":0
+        "time":time.time()
     })
     save(CHATS,chats)
     st.rerun()
+
 
