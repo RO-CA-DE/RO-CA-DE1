@@ -1,189 +1,150 @@
 import streamlit as st
-import json, os, uuid
-from datetime import datetime
+import json, os, uuid, time
 
-# ================= CONFIG =================
-st.set_page_config("AOUSE", layout="centered")
+# ================= BASIC =================
+st.set_page_config(page_title="AOUSE", layout="centered")
 
 DATA="data"
-UPLOADS="uploads"
 os.makedirs(DATA, exist_ok=True)
-os.makedirs(UPLOADS, exist_ok=True)
 
-FILES = {
-    "users": f"{DATA}/users.json",
-    "posts": f"{DATA}/posts.json",
-    "comments": f"{DATA}/comments.json",
-    "likes": f"{DATA}/likes.json",
-    "reactions": f"{DATA}/reactions.json",
-    "follows": f"{DATA}/follows.json"
-}
+USERS=f"{DATA}/users.json"
+POSTS=f"{DATA}/posts.json"
 
-def load(p):
-    if not os.path.exists(p):
-        with open(p,"w",encoding="utf-8") as f:
-            json.dump({},f)
-    with open(p,encoding="utf-8") as f:
-        return json.load(f)
+def load(p, d):
+    if os.path.exists(p):
+        try:
+            return json.load(open(p, encoding="utf-8"))
+        except:
+            return d
+    return d
 
-def save(p,d):
-    with open(p,"w",encoding="utf-8") as f:
-        json.dump(d,f,ensure_ascii=False,indent=2)
+def save(p, d):
+    json.dump(d, open(p,"w",encoding="utf-8"), ensure_ascii=False, indent=2)
 
-users=load(FILES["users"])
-posts=load(FILES["posts"])
-comments=load(FILES["comments"])
-likes=load(FILES["likes"])
-reactions=load(FILES["reactions"])
-follows=load(FILES["follows"])
-
-# ================= STYLE =================
-st.markdown("""
-<style>
-body {background:#fff0f6;}
-h1,h2,h3 {color:#ff4d8d;}
-.card {
- background:white;
- padding:20px;
- border-radius:20px;
- box-shadow:0 10px 25px rgba(255,105,180,.15);
- margin-bottom:20px;
-}
-button {
- background:linear-gradient(135deg,#ff7eb3,#ff4d8d)!important;
- color:white!important;
- border-radius:20px!important;
- border:none!important;
-}
-img {border-radius:18px;}
-hr {border:none;height:1px;background:#ffd6e8;}
-.badge {
- display:inline-block;
- padding:4px 10px;
- border-radius:12px;
- background:#ffe0ec;
- color:#ff4d8d;
- font-size:12px;
- margin-right:5px;
-}
-</style>
-""",unsafe_allow_html=True)
+users=load(USERS,{})
+posts=load(POSTS,{})
 
 # ================= SESSION =================
-if "user" not in st.session_state:
-    st.session_state.user=None
-if "page" not in st.session_state:
-    st.session_state.page="feed"
-if "view" not in st.session_state:
-    st.session_state.view=None
+if "uid" not in st.session_state:
+    st.session_state.uid=None
+if "tab" not in st.session_state:
+    st.session_state.tab="home"
+if "open_post" not in st.session_state:
+    st.session_state.open_post=None
 
-# ================= AUTH =================
-st.title("💗 AOUSE")
+# ================= THEME =================
+st.markdown("""
+<style>
+body { background:#ffe6f0; }
+.card {
+ background:white;
+ border-radius:16px;
+ padding:14px;
+ margin:10px 0;
+}
+.title { font-weight:700; font-size:18px; }
+.content { white-space:pre-wrap; margin-top:8px; }
+.tab {
+ position:fixed;
+ bottom:0; left:0; right:0;
+ background:white;
+ display:flex;
+ justify-content:space-around;
+ padding:12px;
+ border-top:1px solid #eee;
+}
+</style>
+""", unsafe_allow_html=True)
 
-if st.session_state.user is None:
-    t1,t2=st.tabs(["Login","Sign up"])
-    with t1:
-        uid=st.text_input("ID")
-        if st.button("Login"):
-            if uid in users:
-                st.session_state.user=uid
-                st.rerun()
-            else: st.error("No user")
-    with t2:
-        nid=st.text_input("New ID")
-        if st.button("Create"):
-            if nid in users:
-                st.error("Already exists")
-            else:
-                users[nid]={"bio":""}
-                follows[nid]=[]
-                save(FILES["users"],users)
-                save(FILES["follows"],follows)
-                st.success("Created!")
+# ================= LOGIN =================
+st.markdown("## 🌸 AOUSE")
+
+if not st.session_state.uid:
+    name=st.text_input("이름")
+    if st.button("시작하기") and name:
+        uid=str(uuid.uuid4())
+        users[uid]={"name":name}
+        save(USERS, users)
+        st.session_state.uid=uid
+        st.rerun()
     st.stop()
 
-me=st.session_state.user
+me=users[st.session_state.uid]
 
-# ================= NAV =================
-c1,c2,c3=st.columns(3)
-if c1.button("🏠 Feed"): st.session_state.page="feed"
-if c2.button("👤 Profile"): st.session_state.page="profile"
-if c3.button("🚪 Logout"):
-    st.session_state.user=None
-    st.rerun()
+# ================= HOME =================
+if st.session_state.tab=="home":
+    st.markdown("### 🏠 홈")
 
-# ================= NEW POST =================
-st.markdown("<div class='card'>",unsafe_allow_html=True)
-st.subheader("➕ New Post")
-with st.form("post"):
-    txt=st.text_area("Write something")
-    emo=st.selectbox("Emotion",["💗","💔","🔥","😶","🌸"])
-    img=st.file_uploader("Image",["png","jpg","jpeg"])
-    if st.form_submit_button("Post"):
+    pinned=[p for p in posts.values() if p.get("pin")]
+    normal=[p for p in posts.values() if not p.get("pin")]
+
+    for p in pinned + normal:
+        with st.container():
+            st.markdown("<div class='card'>", unsafe_allow_html=True)
+
+            if st.button("📌 "+p["title"], key=p["id"]):
+                st.session_state.open_post = None if st.session_state.open_post==p["id"] else p["id"]
+
+            if st.session_state.open_post==p["id"]:
+                st.markdown(f"<div class='content'>{p['content']}</div>", unsafe_allow_html=True)
+
+                col1,col2,col3=st.columns(3)
+                with col1:
+                    if st.button(f"❤️ {p['likes']}", key="l"+p["id"]):
+                        p["likes"]+=1
+                        save(POSTS, posts)
+                        st.rerun()
+                with col2:
+                    if st.button("✏️", key="e"+p["id"]) and p["uid"]==st.session_state.uid:
+                        p["content"]=st.text_area("수정", p["content"])
+                        if st.button("저장", key="s"+p["id"]):
+                            save(POSTS, posts)
+                            st.rerun()
+                with col3:
+                    if st.button("🗑", key="d"+p["id"]) and p["uid"]==st.session_state.uid:
+                        posts.pop(p["id"])
+                        save(POSTS, posts)
+                        st.rerun()
+
+            st.markdown("</div>", unsafe_allow_html=True)
+
+# ================= WRITE =================
+if st.session_state.tab=="write":
+    st.markdown("### ✍️ 작성")
+
+    title=st.text_input("제목")
+    content=st.text_area("내용 (줄바꿈 가능)", height=200)
+
+    if st.button("게시"):
         pid=str(uuid.uuid4())
-        path=""
-        if img:
-            path=f"{UPLOADS}/{pid}_{img.name}"
-            with open(path,"wb") as f: f.write(img.getbuffer())
         posts[pid]={
-            "user":me,"text":txt,"emotion":emo,
-            "image":path,"time":datetime.now().strftime("%Y-%m-%d %H:%M")
+            "id":pid,
+            "uid":st.session_state.uid,
+            "title":title,
+            "content":content,
+            "likes":0,
+            "pin":False,
+            "time":time.time()
         }
-        save(FILES["posts"],posts)
+        save(POSTS, posts)
+        st.session_state.tab="home"
         st.rerun()
-st.markdown("</div>",unsafe_allow_html=True)
 
 # ================= PROFILE =================
-if st.session_state.page=="profile":
-    st.markdown("<div class='card'>",unsafe_allow_html=True)
-    st.subheader(f"@{me}")
-    bio=st.text_input("Bio",users[me].get("bio",""))
-    if st.button("Save bio"):
-        users[me]["bio"]=bio
-        save(FILES["users"],users)
-    st.markdown(f"Following {len(follows.get(me,[]))}")
-    st.markdown("</div>",unsafe_allow_html=True)
+if st.session_state.tab=="profile":
+    st.markdown("### 👤 프로필")
+    st.markdown(f"**{me['name']}**")
 
-# ================= FEED =================
-st.subheader("🖼 Feed")
-for pid,p in sorted(posts.items(),key=lambda x:x[1]["time"],reverse=True):
-    if st.session_state.page=="profile" and p["user"]!=me:
-        continue
+    for p in posts.values():
+        if p["uid"]==st.session_state.uid:
+            st.markdown(f"- {p['title']}")
 
-    st.markdown("<div class='card'>",unsafe_allow_html=True)
-    st.markdown(f"**@{p['user']}** <span class='badge'>{p['emotion']}</span>",unsafe_allow_html=True)
-    st.caption(p["time"])
+# ================= TAB BAR =================
+st.markdown(f"""
+<div class="tab">
+ <button onclick="window.location.reload()">홈</button>
+ <button onclick="window.location.reload()">작성</button>
+ <button onclick="window.location.reload()">프로필</button>
+</div>
+""", unsafe_allow_html=True)
 
-    if p["image"]: st.image(p["image"],use_column_width=True)
-    st.markdown(p["text"])
-
-    likes.setdefault(pid,[])
-    reactions.setdefault(pid,{"😭":0,"😍":0,"🔥":0})
-
-    c1,c2,c3,c4=st.columns(4)
-    if c1.button(f"❤️ {len(likes[pid])}",key=f"l{pid}"):
-        if me not in likes[pid]:
-            likes[pid].append(me)
-            save(FILES["likes"],likes)
-            st.rerun()
-    if c2.button("😭",key=f"r1{pid}"):
-        reactions[pid]["😭"]+=1; save(FILES["reactions"],reactions); st.rerun()
-    if c3.button("😍",key=f"r2{pid}"):
-        reactions[pid]["😍"]+=1; save(FILES["reactions"],reactions); st.rerun()
-    if c4.button("🔥",key=f"r3{pid}"):
-        reactions[pid]["🔥"]+=1; save(FILES["reactions"],reactions); st.rerun()
-
-    st.markdown(f"😭 {reactions[pid]['😭']} · 😍 {reactions[pid]['😍']} · 🔥 {reactions[pid]['🔥']}")
-
-    comments.setdefault(pid,[])
-    for c in comments[pid]:
-        st.markdown(f"💬 **@{c['user']}** {c['text']}")
-
-    with st.form(f"c{pid}"):
-        ct=st.text_input("Comment",key=f"ct{pid}")
-        if st.form_submit_button("Send"):
-            comments[pid].append({"user":me,"text":ct})
-            save(FILES["comments"],comments)
-            st.rerun()
-
-    st.markdown("</div>",unsafe_allow_html=True)
