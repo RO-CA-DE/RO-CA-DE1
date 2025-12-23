@@ -1,7 +1,7 @@
 import streamlit as st
 from datetime import datetime
 
-st.set_page_config(page_title="Azin Chat", layout="centered")
+st.set_page_config(page_title="Azin Pink Chat", layout="centered")
 
 # =====================
 # SESSION STATE
@@ -16,14 +16,14 @@ if "admin_profile" not in st.session_state:
     st.session_state.admin_profile = {
         "name": "아진",
         "avatar": "https://i.pravatar.cc/100?img=5",
-        "color": "#D98989"
+        "color": "#FF6F91"  # 핑크 기본값
     }
 
 # =====================
-# SIDEBAR (LOGIN & SETTINGS)
+# SIDEBAR (LOGIN & ADMIN SETTINGS)
 # =====================
 with st.sidebar:
-    st.title("⚙️ 설정")
+    st.title("🎀 설정")
 
     st.subheader("로그인")
     st.session_state.role = st.radio(
@@ -33,31 +33,36 @@ with st.sidebar:
     )
 
     if st.session_state.role == "admin":
-        st.subheader("관리자 프로필")
+        st.subheader("👩‍💼 관리자 설정")
+
         st.session_state.admin_profile["name"] = st.text_input(
             "이름",
             st.session_state.admin_profile["name"]
         )
+
         st.session_state.admin_profile["avatar"] = st.text_input(
             "프로필 이미지 URL",
             st.session_state.admin_profile["avatar"]
         )
+
         st.session_state.admin_profile["color"] = st.color_picker(
             "말풍선 색상",
             st.session_state.admin_profile["color"]
         )
 
-    if st.button("🧹 메시지 초기화"):
+    st.divider()
+
+    if st.button("🧹 메시지 전체 초기화"):
         st.session_state.messages = []
         st.experimental_rerun()
 
 # =====================
-# CSS
+# CSS (PINK THEME)
 # =====================
 st.markdown(f"""
 <style>
 body {{
-    background:#FFF5F5;
+    background:#FFF0F5;
 }}
 .chat {{
     max-width:420px;
@@ -67,13 +72,13 @@ body {{
     text-align:center;
     margin:20px 0;
     font-size:13px;
-    color:#777;
+    color:#B85C8A;
 }}
 .date span {{
     background:white;
     padding:4px 14px;
     border-radius:999px;
-    box-shadow:0 4px 12px rgba(0,0,0,.08);
+    box-shadow:0 4px 12px rgba(255,111,145,.25);
 }}
 .msg {{
     display:flex;
@@ -92,6 +97,7 @@ body {{
     font-size:12px;
     font-weight:600;
     margin-bottom:4px;
+    color:#8A3C66;
 }}
 .bubble {{
     padding:10px 14px;
@@ -99,22 +105,22 @@ body {{
     max-width:260px;
     word-break:break-word;
     white-space:pre-wrap;
-    box-shadow:0 6px 18px rgba(0,0,0,.12);
+    box-shadow:0 6px 18px rgba(255,111,145,.35);
 }}
 .admin {{
     background:{st.session_state.admin_profile["color"]};
     color:white;
 }}
 .fan {{
-    background:#E5E5EA;
-    color:#333;
+    background:#FFE4EC;
+    color:#5A2A42;
 }}
 .input {{
     position:sticky;
     bottom:0;
     background:white;
     padding:12px;
-    border-top:1px solid #eee;
+    border-top:1px solid #FFD1E1;
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -123,7 +129,7 @@ body {{
 # RENDER FUNCTION (SAFE)
 # =====================
 def render(m):
-    side = "right" if m.get("side", "left") == "right" else ""
+    side = "right" if m.get("side") == "right" else ""
     role = "admin" if m.get("role") == "admin" else "fan"
 
     st.markdown(f"""
@@ -184,5 +190,6 @@ if send and text.strip():
     st.experimental_rerun()
 
 st.markdown('</div>', unsafe_allow_html=True)
+
 
 
