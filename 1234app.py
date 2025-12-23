@@ -47,6 +47,10 @@ with st.sidebar:
             st.session_state.admin_profile["color"]
         )
 
+    if st.button("🧹 메시지 초기화"):
+        st.session_state.messages = []
+        st.experimental_rerun()
+
 # =====================
 # CSS
 # =====================
@@ -116,32 +120,36 @@ body {{
 """, unsafe_allow_html=True)
 
 # =====================
-# RENDER
+# RENDER FUNCTION (SAFE)
 # =====================
 def render(m):
-    side = "right" if m["side"] == "right" else ""
-    role = "admin" if m["role"] == "admin" else "fan"
+    side = "right" if m.get("side", "left") == "right" else ""
+    role = "admin" if m.get("role") == "admin" else "fan"
 
     st.markdown(f"""
     <div class="msg {side}">
-        <img class="avatar" src="{m['avatar']}">
+        <img class="avatar" src="{m.get('avatar', '')}">
         <div>
-            <div class="name">{m['name']}</div>
-            <div class="bubble {role}">{m['text']}</div>
+            <div class="name">{m.get('name', '')}</div>
+            <div class="bubble {role}">{m.get('text', '')}</div>
         </div>
     </div>
     """, unsafe_allow_html=True)
 
+# =====================
+# CHAT UI
+# =====================
 st.markdown('<div class="chat">', unsafe_allow_html=True)
 
 last_date = ""
 for m in st.session_state.messages:
-    if m["date"] != last_date:
+    date = m.get("date", "")
+    if date != last_date:
         st.markdown(
-            f'<div class="date"><span>{m["date"]}</span></div>',
+            f'<div class="date"><span>{date}</span></div>',
             unsafe_allow_html=True
         )
-        last_date = m["date"]
+        last_date = date
     render(m)
 
 st.markdown('</div>', unsafe_allow_html=True)
@@ -176,4 +184,5 @@ if send and text.strip():
     st.experimental_rerun()
 
 st.markdown('</div>', unsafe_allow_html=True)
+
 
